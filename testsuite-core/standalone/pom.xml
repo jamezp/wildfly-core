@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<!-- 
-  Set these VM properties in your IDE debugger 
+<!--
+  Set these VM properties in your IDE debugger
 
   -Djava.util.logging.manager=org.jboss.logmanager.LogManager
-  -Djboss.home=${workspace_loc:wildfly-build}/target/wildfly-1.0.0.Alpha4-SNAPSHOT 
+  -Djboss.home=${workspace_loc:wildfly-build}/target/wildfly-1.0.0.Alpha4-SNAPSHOT
   -DallowConnectingToRunningServer=true
 -->
 <project xmlns="http://maven.apache.org/POM/4.0.0"
@@ -62,6 +62,8 @@
                         <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
                         <jboss.home>${project.basedir}/target/wildfly-core</jboss.home>
                         <jvm.args>${surefire.system.args} ${jvm.args.ip.server} ${jvm.args.security} ${jvm.args.other} ${jvm.args.timeouts} -Djbossas.ts.dir=${jbossas.ts.dir}</jvm.args>
+                        <!-- The target for the process console output -->
+                        <process.log.file>${project.build.directory}/wildfly-process.log</process.log.file>
                     </systemPropertyVariables>
                 </configuration>
             </plugin>
