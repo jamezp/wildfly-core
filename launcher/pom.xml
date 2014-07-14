@@ -36,6 +36,10 @@
 
     <name>WildFly: Launcher API</name>
 
+    <properties>
+        <wildfly.launcher.home>${basedir}/target/fake-wildfly</wildfly.launcher.home>
+    </properties>
+
     <dependencies>
         <!-- This dependency is only needed at compile time and requires no runtime dependencies -->
         <dependency>
@@ -67,7 +71,52 @@
             <artifactId>junit</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>org.jboss.modules</groupId>
+            <artifactId>jboss-modules</artifactId>
+            <scope>test</scope>
+        </dependency>
 
     </dependencies>
+
+    <build>
+        <plugins>
+            <!-- Create a fake WildFly directory -->
+            <plugin>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>copy-deps</id>
+                        <phase>test-compile</phase>
+                        <goals>
+                            <goal>copy</goal>
+                        </goals>
+                        <configuration>
+                            <artifactItems>
+                                <artifactItem>
+                                    <groupId>org.jboss.modules</groupId>
+                                    <artifactId>jboss-modules</artifactId>
+                                    <type>jar</type>
+                                    <overWrite>true</overWrite>
+                                    <outputDirectory>${wildfly.launcher.home}</outputDirectory>
+                                    <destFileName>jboss-modules.jar</destFileName>
+                                </artifactItem>
+                            </artifactItems>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <systemPropertyVariables>
+                        <wildfly.launcher.home>${wildfly.launcher.home}</wildfly.launcher.home>
+                    </systemPropertyVariables>
+                </configuration>
+            </plugin>
+        </plugins>
+
+    </build>
 
 </project>
