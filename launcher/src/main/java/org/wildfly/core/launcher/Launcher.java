@@ -228,7 +228,7 @@ public class Launcher {
      * @return the launcher
      */
     public Launcher addEnvironmentVariables(final Map<String, String> env) {
-        env.putAll(env);
+        this.env.putAll(env);
         return this;
     }
 
