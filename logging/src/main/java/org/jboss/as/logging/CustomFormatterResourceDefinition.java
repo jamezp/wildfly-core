@@ -121,7 +121,7 @@ class CustomFormatterResourceDefinition extends TransformerResourceDefinition {
     static final OperationStepHandler WRITE = new LoggingWriteAttributeHandler(ATTRIBUTES) {
 
         @Override
-        protected boolean applyUpdate(final OperationContext context, final String attributeName, final String addressName, final ModelNode value, final LogContextConfiguration logContextConfiguration) throws OperationFailedException {
+        protected boolean applyUpdate(final OperationContext context, final String attributeName, final String addressName, final ModelNode originalValue, final ModelNode value, final LogContextConfiguration logContextConfiguration) throws OperationFailedException {
             final FormatterConfiguration configuration = logContextConfiguration.getFormatterConfiguration(addressName);
             if (PROPERTIES.getName().equals(attributeName)) {
                 if (value.isDefined()) {

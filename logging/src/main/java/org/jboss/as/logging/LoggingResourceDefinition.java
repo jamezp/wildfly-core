@@ -43,7 +43,6 @@ import org.jboss.as.controller.OperationContext;
 import org.jboss.as.controller.OperationContext.ResultHandler;
 import org.jboss.as.controller.OperationFailedException;
 import org.jboss.as.controller.OperationStepHandler;
-import org.jboss.as.controller.PathAddress;
 import org.jboss.as.controller.PathElement;
 import org.jboss.as.controller.ReloadRequiredRemoveStepHandler;
 import org.jboss.as.controller.ReloadRequiredWriteAttributeHandler;
@@ -55,7 +54,6 @@ import org.jboss.as.controller.operations.validation.IntRangeValidator;
 import org.jboss.as.controller.operations.validation.StringLengthValidator;
 import org.jboss.as.controller.registry.AttributeAccess.Flag;
 import org.jboss.as.controller.registry.ManagementResourceRegistration;
-import org.jboss.as.controller.registry.Resource;
 import org.jboss.as.controller.services.path.PathManager;
 import org.jboss.as.controller.transform.description.DiscardAttributeChecker;
 import org.jboss.as.controller.transform.description.RejectAttributeChecker;
@@ -65,7 +63,6 @@ import org.jboss.as.logging.logmanager.WildFlyLogContextSelector;
 import org.jboss.as.server.ServerEnvironment;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.ModelType;
-import org.jboss.dmr.Property;
 
 /**
  * @author <a href="mailto:tomaz.cerar@redhat.com">Tomaz Cerar</a>
@@ -201,8 +198,7 @@ public class LoggingResourceDefinition extends TransformerResourceDefinition {
 
         @Override
         public void execute(final OperationContext context, final ModelNode operation) throws OperationFailedException {
-            final ModelNode model = Resource.Tools.readModel(context.readResource(PathAddress.EMPTY_ADDRESS));
-            final List<File> logFiles = findFiles(pathManager.getPathEntry(ServerEnvironment.SERVER_LOG_DIR).resolvePath(), model);
+            final List<File> logFiles = LoggingResource.findFiles(pathManager.getPathEntry(ServerEnvironment.SERVER_LOG_DIR).resolvePath());
             final SimpleDateFormat dateFormat = new SimpleDateFormat(LogFileResourceDefinition.ISO_8601_FORMAT);
             final ModelNode result = context.getResult().setEmptyList();
             for (File logFile : logFiles) {
@@ -244,8 +240,7 @@ public class LoggingResourceDefinition extends TransformerResourceDefinition {
             if (!path.exists()) {
                 throw LoggingLogger.ROOT_LOGGER.logFileNotFound(fileName, ServerEnvironment.SERVER_LOG_DIR);
             }
-            final ModelNode model = Resource.Tools.readModel(context.readResource(PathAddress.EMPTY_ADDRESS));
-            final List<File> logFiles = findFiles(pathManager.getPathEntry(ServerEnvironment.SERVER_LOG_DIR).resolvePath(), model);
+            final List<File> logFiles = LoggingResource.findFiles(pathManager.getPathEntry(ServerEnvironment.SERVER_LOG_DIR).resolvePath());
             // User must have permissions to read the file
             if (!path.canRead() || !logFiles.contains(path)) {
                 throw LoggingLogger.ROOT_LOGGER.readNotAllowed(fileName);
@@ -312,16 +307,5 @@ public class LoggingResourceDefinition extends TransformerResourceDefinition {
         } catch (Throwable t) {
             LoggingLogger.ROOT_LOGGER.failedToCloseResource(t, closeable);
         }
-    }
-
-    private static List<File> findFiles(final String defaultLogDir, final ModelNode model) {
-        final List<File> logFiles = new ArrayList<>(LoggingResource.findFiles(defaultLogDir, model));
-        // Also need to include logging profile log files
-        if (model.hasDefined(CommonAttributes.LOGGING_PROFILE)) {
-            for (Property property : model.get(CommonAttributes.LOGGING_PROFILE).asPropertyList()) {
-                logFiles.addAll(LoggingResource.findFiles(defaultLogDir, property.getValue()));
-            }
-        }
-        return logFiles;
     }
 }

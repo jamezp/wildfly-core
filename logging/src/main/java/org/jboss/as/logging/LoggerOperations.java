@@ -61,7 +61,7 @@ final class LoggerOperations {
         }
 
         @Override
-        public final void performRuntime(final OperationContext context, final ModelNode operation, final LogContextConfiguration logContextConfiguration, final String name, final ModelNode model) throws OperationFailedException {
+        public final void performRuntime(final OperationContext context, final ModelNode originalModel, final ModelNode operation, final LogContextConfiguration logContextConfiguration, final String name, final ModelNode model) throws OperationFailedException {
             final String loggerName = getLogManagerLoggerName(name);
             LoggerConfiguration configuration = logContextConfiguration.getLoggerConfiguration(loggerName);
             if (configuration == null) {
@@ -137,7 +137,7 @@ final class LoggerOperations {
         }
 
         @Override
-        protected boolean applyUpdate(final OperationContext context, final String attributeName, final String addressName, final ModelNode value, final LogContextConfiguration logContextConfiguration) throws OperationFailedException {
+        protected boolean applyUpdate(final OperationContext context, final String attributeName, final String addressName, final ModelNode originalValue, final ModelNode value, final LogContextConfiguration logContextConfiguration) throws OperationFailedException {
             final String loggerName = getLogManagerLoggerName(addressName);
             if (logContextConfiguration.getLoggerNames().contains(loggerName)) {
                 final LoggerConfiguration configuration = logContextConfiguration.getLoggerConfiguration(loggerName);

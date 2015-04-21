@@ -312,13 +312,13 @@ public class LoggingSubsystemRollbackTestCase extends AbstractLoggingSubsystemTe
                     targetClass = "org.jboss.as.logging.HandlerOperations$HandlerUpdateOperationStepHandler",
                     targetMethod = "performRuntime",
                     targetLocation = "AT EXIT",
-                    condition = "$4.equals(\"CONSOLE\")",
+                    condition = "$5.equals(\"CONSOLE\")",
                     action = "$1.setRollbackOnly()"),
             @BMRule(name = "Test logger rollback handler",
                     targetClass = "org.jboss.as.logging.LoggerOperations$LoggerUpdateOperationStepHandler",
                     targetMethod = "performRuntime",
                     targetLocation = "AT EXIT",
-                    condition = "$4.equals(\"ROOT\")",
+                    condition = "$5.equals(\"ROOT\")",
                     action = "$1.setRollbackOnly()")
     })
     public void testRollbackUpdateAttribute() throws Exception {

@@ -26,7 +26,6 @@ import static org.jboss.as.logging.LogFileResourceDefinition.LOG_FILE;
 
 import java.io.File;
 import java.io.FileFilter;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashSet;
@@ -38,24 +37,15 @@ import org.jboss.as.controller.PathElement;
 import org.jboss.as.controller.registry.PlaceholderResource;
 import org.jboss.as.controller.registry.PlaceholderResource.PlaceholderResourceEntry;
 import org.jboss.as.controller.registry.Resource;
-import org.jboss.as.controller.registry.ResourceFilter;
 import org.jboss.as.controller.services.path.PathManager;
-import org.jboss.as.controller.services.path.PathResourceDefinition;
 import org.jboss.as.logging.logging.LoggingLogger;
 import org.jboss.as.server.ServerEnvironment;
 import org.jboss.dmr.ModelNode;
-import org.jboss.dmr.Property;
 
 /**
  * @author <a href="mailto:jperkins@redhat.com">James R. Perkins</a>
  */
 public class LoggingResource implements Resource {
-    private static final List<String> FILE_RESOURCE_NAMES = Arrays.asList(
-            FileHandlerResourceDefinition.FILE_HANDLER,
-            PeriodicHandlerResourceDefinition.PERIODIC_ROTATING_FILE_HANDLER,
-            PeriodicSizeRotatingHandlerResourceDefinition.PERIODIC_SIZE_ROTATING_FILE_HANDLER,
-            SizeRotatingHandlerResourceDefinition.SIZE_ROTATING_FILE_HANDLER
-    );
 
     private final PathManager pathManager;
     private final Resource delegate;
@@ -145,8 +135,7 @@ public class LoggingResource implements Resource {
     public Set<String> getChildrenNames(final String childType) {
         if (LOG_FILE.equals(childType)) {
             final Set<String> result = new LinkedHashSet<>();
-            for (File file : findFiles(pathManager.getPathEntry(ServerEnvironment.SERVER_LOG_DIR).resolvePath(),
-                    Tools.readModel(delegate, -1, FileHandlerResourceFilter.INSTANCE))) {
+            for (File file : findFiles(pathManager.getPathEntry(ServerEnvironment.SERVER_LOG_DIR).resolvePath())) {
                 result.add(file.getName());
             }
             return result;
@@ -207,15 +196,16 @@ public class LoggingResource implements Resource {
     /**
      * Finds all the files in the {@code jboss.server.log.dir} that are defined on a known file handler.
      *
-     * @param model the model to read
+     * @param logDir the allowed logging directory
      *
      * @return a list of files or an empty list if no files were found
      */
-    static List<File> findFiles(final String logDir, final ModelNode model) {
+    // TODO (jrp) model should resolve expressions
+    static List<File> findFiles(final String logDir) {
         if (logDir == null) {
             return Collections.emptyList();
         }
-        final File[] logFiles = new File(logDir).listFiles(AllowedFilesFilter.create(model));
+        final File[] logFiles = new File(logDir).listFiles(new AllowedFilesFilter());
         final List<File> result;
         if (logFiles == null) {
             result = Collections.emptyList();
@@ -226,56 +216,14 @@ public class LoggingResource implements Resource {
         return result;
     }
 
-    private static class FileHandlerResourceFilter implements ResourceFilter {
-
-        static final FileHandlerResourceFilter INSTANCE = new FileHandlerResourceFilter();
-
-        @Override
-        public boolean accepts(final PathAddress address, final Resource resource) {
-            final PathElement last = address.getLastElement();
-            return last == null || FILE_RESOURCE_NAMES.contains(last.getKey());
-        }
-    }
-
     private static class AllowedFilesFilter implements FileFilter {
-
-        private final List<String> allowedNames;
-
-        private AllowedFilesFilter(final List<String> allowedNames) {
-            this.allowedNames = allowedNames;
-        }
-
-        static AllowedFilesFilter create(final ModelNode subsystemModel) {
-            final List<String> allowedNames = new ArrayList<String>();
-            findFileNames(subsystemModel, allowedNames);
-            return new AllowedFilesFilter(allowedNames);
-        }
-
-        private static void findFileNames(final ModelNode model, final List<String> names) {
-            // Get all the file names from the model
-            for (Property resource : model.asPropertyList()) {
-                final String name = resource.getName();
-                if (FILE_RESOURCE_NAMES.contains(name)) {
-                    for (Property handlerResource : resource.getValue().asPropertyList()) {
-                        final ModelNode handlerModel = handlerResource.getValue();
-                        // This should always exist, but better to be safe
-                        if (handlerModel.hasDefined(CommonAttributes.FILE.getName())) {
-                            final ModelNode fileModel = handlerModel.get(CommonAttributes.FILE.getName());
-                            if (fileModel.hasDefined(PathResourceDefinition.PATH.getName())) {
-                                names.add(fileModel.get(PathResourceDefinition.PATH.getName()).asString());
-                            }
-                        }
-                    }
-                }
-            }
-        }
 
         @Override
         public boolean accept(final File pathname) {
             if (pathname.canRead()) {
                 final String name = pathname.getName();
                 // Let's do a best guess on the file
-                for (String allowedName : allowedNames) {
+                for (String allowedName : AllowedResourceFiles.getInstance()) {
                     if (name.equals(allowedName) || name.startsWith(allowedName)) {
                         return true;
                     }

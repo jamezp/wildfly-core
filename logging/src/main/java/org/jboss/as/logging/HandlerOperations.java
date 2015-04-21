@@ -56,10 +56,13 @@ import org.jboss.as.controller.OperationFailedException;
 import org.jboss.as.controller.OperationStepHandler;
 import org.jboss.as.controller.PathAddress;
 import org.jboss.as.controller.registry.Resource;
+import org.jboss.as.controller.services.path.PathResourceDefinition;
 import org.jboss.as.logging.logging.LoggingLogger;
+import org.jboss.as.logging.logmanager.ConfigurationPersistence;
 import org.jboss.as.logging.logmanager.Log4jAppenderHandler;
 import org.jboss.as.logging.logmanager.PropertySorter;
 import org.jboss.as.logging.resolvers.ModelNodeResolver;
+import org.jboss.as.server.ServerEnvironment;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.Property;
 import org.jboss.logmanager.LogContext;
@@ -122,7 +125,7 @@ final class HandlerOperations {
         }
 
         @Override
-        public final void performRuntime(final OperationContext context, final ModelNode operation, final LogContextConfiguration logContextConfiguration, final String name, final ModelNode model) throws OperationFailedException {
+        public final void performRuntime(final OperationContext context, final ModelNode originalModel, final ModelNode operation, final LogContextConfiguration logContextConfiguration, final String name, final ModelNode model) throws OperationFailedException {
             final HandlerConfiguration configuration = logContextConfiguration.getHandlerConfiguration(name);
             if (configuration == null) {
                 throw createOperationFailure(LoggingLogger.ROOT_LOGGER.handlerConfigurationNotFound(name));
@@ -136,6 +139,27 @@ final class HandlerOperations {
                         handleProperty(attribute, context, model, logContextConfiguration, configuration);
                         restartRequired = restartRequired || Logging.requiresRestart(attribute.getFlags());
                         reloadRequired = reloadRequired || Logging.requiresReload(attribute.getFlags());
+                        // Check the operation for a file attribute, remove the old file and add the new if required
+                        if (attribute.equals(CommonAttributes.FILE)) {
+                            final String fileAttributeName = attribute.getName();
+                            if (operation.has(fileAttributeName)) {
+                                final AllowedResourceFiles allowedResourceFiles = AllowedResourceFiles.getInstance();
+                                // Add the new file
+                                if (model.hasDefined(fileAttributeName)) {
+                                    final ModelNode newFile = model.get(fileAttributeName);
+                                    // The file must have a defined relative-to with a value of jboss.server.log.dir
+                                    if (newFile.hasDefined(PathResourceDefinition.RELATIVE_TO.getName()) &&
+                                            newFile.get(PathResourceDefinition.RELATIVE_TO.getName()).asString().equals(ServerEnvironment.SERVER_LOG_DIR)) {
+                                        allowedResourceFiles.addAllowedFileName(PathResourceDefinition.PATH.resolveModelAttribute(context, newFile).asString());
+                                    }
+                                }
+                                // Remove the old file
+                                if (originalModel.hasDefined(fileAttributeName)) {
+                                    final ModelNode originalFile = originalModel.get(fileAttributeName);
+                                    allowedResourceFiles.removeAllowedFileName(PathResourceDefinition.PATH.resolveModelAttribute(context, originalFile).asString());
+                                }
+                            }
+                        }
                     }
                 }
                 if (restartRequired) {
@@ -271,6 +295,21 @@ final class HandlerOperations {
 
                 if (!skip)
                     handleProperty(attribute, context, model, logContextConfiguration, configuration);
+                // Check the operation for a file attribute, remove the old file and add the new if required
+                if (attribute.equals(CommonAttributes.FILE)) {
+                    final String fileAttributeName = attribute.getName();
+                    if (operation.has(fileAttributeName)) {
+                        // Add the new file
+                        if (model.hasDefined(fileAttributeName)) {
+                            final ModelNode newFile = model.get(fileAttributeName);
+                            // The file must have a defined relative-to with a value of jboss.server.log.dir
+                            if (newFile.hasDefined(PathResourceDefinition.RELATIVE_TO.getName()) &&
+                                    newFile.get(PathResourceDefinition.RELATIVE_TO.getName()).asString().equals(ServerEnvironment.SERVER_LOG_DIR)) {
+                                AllowedResourceFiles.getInstance().addAllowedFileName(PathResourceDefinition.PATH.resolveModelAttribute(context, newFile).asString());
+                            }
+                        }
+                    }
+                }
             }
 
             // It's important that properties are written in the correct order, reorder the properties if
@@ -344,7 +383,7 @@ final class HandlerOperations {
         }
 
         @Override
-        protected boolean applyUpdate(final OperationContext context, final String attributeName, final String addressName, final ModelNode value, final LogContextConfiguration logContextConfiguration) throws OperationFailedException {
+        protected boolean applyUpdate(final OperationContext context, final String attributeName, final String addressName, final ModelNode originalValue, final ModelNode value, final LogContextConfiguration logContextConfiguration) throws OperationFailedException {
             boolean restartRequired = false;
             if (logContextConfiguration.getHandlerNames().contains(addressName)) {
                 final HandlerConfiguration configuration = logContextConfiguration.getHandlerConfiguration(addressName);
@@ -397,6 +436,18 @@ final class HandlerOperations {
                         if (attribute.getName().equals(attributeName)) {
                             handleProperty(attribute, context, value, logContextConfiguration, configuration, false);
                             restartRequired = Logging.requiresReload(attribute.getFlags());
+                            // Check the operation for a file attribute, remove the old file and add the new if required
+                            if (attribute.equals(CommonAttributes.FILE)) {
+                                final AllowedResourceFiles allowedResourceFiles = AllowedResourceFiles.getInstance();
+                                // Add the new file
+                                // The file must have a defined relative-to with a value of jboss.server.log.dir
+                                if (value.hasDefined(PathResourceDefinition.RELATIVE_TO.getName()) &&
+                                        value.get(PathResourceDefinition.RELATIVE_TO.getName()).asString().equals(ServerEnvironment.SERVER_LOG_DIR)) {
+                                    allowedResourceFiles.addAllowedFileName(value.get(PathResourceDefinition.PATH.getName()).asString());
+                                }
+                                // Remove the old file
+                                allowedResourceFiles.removeAllowedFileName(originalValue.get(PathResourceDefinition.PATH.getName()).asString());
+                            }
                             break;
                         }
                     }
@@ -407,6 +458,12 @@ final class HandlerOperations {
                 addOrderPropertiesStep(context, propertySorter, configuration);
             }
             return restartRequired;
+        }
+
+        @Override
+        protected void revertUpdateToRuntime(final OperationContext context, final ModelNode operation, final String attributeName, final ModelNode valueToRestore, final ModelNode valueToRevert, final ConfigurationPersistence configurationPersistence) throws OperationFailedException {
+            super.revertUpdateToRuntime(context, operation, attributeName, valueToRestore, valueToRevert, configurationPersistence);
+            AllowedResourceFiles.getInstance().rollback();
         }
 
         @Override
@@ -569,7 +626,7 @@ final class HandlerOperations {
         }
 
         @Override
-        public void performRuntime(final OperationContext context, final ModelNode operation, final LogContextConfiguration configuration, final String name, final ModelNode model) throws OperationFailedException {
+        public void performRuntime(final OperationContext context, final ModelNode originalModel, final ModelNode operation, final LogContextConfiguration configuration, final String name, final ModelNode model) throws OperationFailedException {
             enableHandler(configuration, name);
         }
     };
@@ -582,7 +639,7 @@ final class HandlerOperations {
         }
 
         @Override
-        public void performRuntime(final OperationContext context, final ModelNode operation, final LogContextConfiguration configuration, final String name, final ModelNode model) throws OperationFailedException {
+        public void performRuntime(final OperationContext context, final ModelNode originalModel, final ModelNode operation, final LogContextConfiguration configuration, final String name, final ModelNode model) throws OperationFailedException {
             disableHandler(configuration, name);
         }
     };

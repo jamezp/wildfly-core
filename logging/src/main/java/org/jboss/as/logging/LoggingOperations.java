@@ -99,6 +99,7 @@ final class LoggingOperations {
                 @Override
                 public void handleResult(final ResultAction resultAction, final OperationContext context, final ModelNode operation) {
                     if (resultAction == ResultAction.KEEP) {
+                        AllowedResourceFiles.getInstance().commit();
                         configurationPersistence.commit();
                         if (!LoggingProfileOperations.isLoggingProfileAddress(getAddress(operation))) {
                             // Write once
@@ -164,6 +165,7 @@ final class LoggingOperations {
                 context.completeStep(new RollbackHandler() {
                     @Override
                     public void handleRollback(final OperationContext context, final ModelNode operation) {
+                        AllowedResourceFiles.getInstance().rollback();
                         configurationPersistence.rollback();
                     }
                 });
@@ -171,19 +173,6 @@ final class LoggingOperations {
         }
 
         public abstract void execute(OperationContext context, ModelNode operation, String name, LogContextConfiguration logContextConfiguration) throws OperationFailedException;
-
-        /**
-         * Executes additional processing for this step.
-         *
-         * @param context                 the operation context
-         * @param operation               the operation being executed
-         * @param logContextConfiguration the logging context configuration
-         * @param name                    the name of the logger
-         * @param model                   the model to update
-         *
-         * @throws OperationFailedException if a processing error occurs
-         */
-        public abstract void performRuntime(OperationContext context, ModelNode operation, LogContextConfiguration logContextConfiguration, String name, ModelNode model) throws OperationFailedException;
     }
 
 
@@ -217,6 +206,19 @@ final class LoggingOperations {
          */
         public abstract void updateModel(ModelNode operation, ModelNode model) throws OperationFailedException;
 
+        /**
+         * Executes additional processing for this step.
+         *
+         * @param context                 the operation context
+         * @param operation               the operation being executed
+         * @param logContextConfiguration the logging context configuration
+         * @param name                    the name of the logger
+         * @param model                   the model to update
+         *
+         * @throws OperationFailedException if a processing error occurs
+         */
+        public abstract void performRuntime(OperationContext context, ModelNode operation, LogContextConfiguration logContextConfiguration, String name, ModelNode model) throws OperationFailedException;
+
     }
 
 
@@ -229,12 +231,13 @@ final class LoggingOperations {
         public final void execute(final OperationContext context, final ModelNode operation, final String name, final LogContextConfiguration logContextConfiguration) throws OperationFailedException {
             final Resource resource = context.readResourceForUpdate(PathAddress.EMPTY_ADDRESS);
             final ModelNode model = resource.getModel();
+            final ModelNode originalModel = model.clone();
             updateModel(operation, model);
             if (context.isNormalServer()) {
                 context.addStep(new OperationStepHandler() {
                     @Override
                     public void execute(final OperationContext context, final ModelNode operation) throws OperationFailedException {
-                        performRuntime(context, operation, logContextConfiguration, name, model);
+                        performRuntime(context, originalModel, operation, logContextConfiguration, name, model);
                     }
                 }, Stage.RUNTIME);
             }
@@ -250,12 +253,27 @@ final class LoggingOperations {
          */
         public abstract void updateModel(ModelNode operation, ModelNode model) throws OperationFailedException;
 
+        /**
+         * Executes additional processing for this step.
+         *
+         * @param context                 the operation context
+         * @param originalModel           the original model for the resource
+         * @param operation               the operation being executed
+         * @param logContextConfiguration the logging context configuration
+         * @param name                    the name of the logger
+         * @param model                   the model to update
+         *
+         * @throws OperationFailedException if a processing error occurs
+         */
+        public abstract void performRuntime(OperationContext context, final ModelNode originalModel, ModelNode operation, LogContextConfiguration logContextConfiguration, String name, ModelNode model) throws OperationFailedException;
+
     }
 
 
     /**
      * A base remove step handler for logging operations.
      */
+    // TODO (jrp) method names here should be reviewed and probably changed. performRemove is a bit confusing since it happens in the model stage
     abstract static class LoggingRemoveOperationStepHandler extends LoggingOperationStepHandler {
 
         @Override
@@ -287,6 +305,19 @@ final class LoggingOperations {
          */
         protected abstract void performRemove(OperationContext context, ModelNode operation, LogContextConfiguration logContextConfiguration, String name, ModelNode model) throws OperationFailedException;
 
+        /**
+         * Executes additional processing for this step.
+         *
+         * @param context                 the operation context
+         * @param operation               the operation being executed
+         * @param logContextConfiguration the logging context configuration
+         * @param name                    the name of the logger
+         * @param model                   the model to update
+         *
+         * @throws OperationFailedException if a processing error occurs
+         */
+        public abstract void performRuntime(OperationContext context, ModelNode operation, LogContextConfiguration logContextConfiguration, String name, ModelNode model) throws OperationFailedException;
+
     }
 
 
@@ -315,7 +346,7 @@ final class LoggingOperations {
             }
             final LogContextConfiguration logContextConfiguration = configurationPersistence.getLogContextConfiguration();
             handbackHolder.setHandback(configurationPersistence);
-            final boolean restartRequired = applyUpdate(context, attributeName, name, resolvedValue, logContextConfiguration);
+            final boolean restartRequired = applyUpdate(context, attributeName, name, currentValue, resolvedValue, logContextConfiguration);
             addCommitStep(context, configurationPersistence);
             return restartRequired;
         }
@@ -326,6 +357,7 @@ final class LoggingOperations {
          * @param context                 the operation context
          * @param attributeName           the name of the attribute being written
          * @param addressName             the name of the handler or logger
+         * @param originalValue           the original value for the attribute
          * @param value                   the value to set the attribute to
          * @param logContextConfiguration the log context configuration
          *
@@ -333,7 +365,7 @@ final class LoggingOperations {
          *
          * @throws OperationFailedException if an error occurs
          */
-        protected abstract boolean applyUpdate(final OperationContext context, final String attributeName, final String addressName, final ModelNode value, final LogContextConfiguration logContextConfiguration) throws OperationFailedException;
+        protected abstract boolean applyUpdate(final OperationContext context, final String attributeName, final String addressName, final ModelNode originalValue, final ModelNode value, final LogContextConfiguration logContextConfiguration) throws OperationFailedException;
 
         @Override
         protected void revertUpdateToRuntime(final OperationContext context, final ModelNode operation, final String attributeName, final ModelNode valueToRestore, final ModelNode valueToRevert, final ConfigurationPersistence configurationPersistence) throws OperationFailedException {
