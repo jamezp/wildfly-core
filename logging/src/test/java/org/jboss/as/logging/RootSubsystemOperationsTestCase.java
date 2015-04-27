@@ -56,6 +56,7 @@ public class RootSubsystemOperationsTestCase extends AbstractOperationsTestCase 
 
     @Override
     protected AdditionalInitialization createAdditionalInitialization() {
+        //return LoggingTestEnvironment.create(systemProperties);
         return LoggingTestEnvironment.get();
     }
 
@@ -86,7 +87,7 @@ public class RootSubsystemOperationsTestCase extends AbstractOperationsTestCase 
         List<ModelNode> resources = SubsystemOperations.readResult(result).asList();
         assertFalse("No Resources were found: " + result, resources.isEmpty());
 
-        final int currentSize = resources.size();
+        int currentSize = resources.size();
 
         // Add a new file not in the jboss.server.log.dir directory
         final File logFile = new File(LoggingTestEnvironment.get().getLogDir(), "fh.log");
@@ -106,12 +107,26 @@ public class RootSubsystemOperationsTestCase extends AbstractOperationsTestCase 
         // Should be an additional resource
         result = executeOperation(kernelServices, SubsystemOperations.createReadResourceOperation(address));
         resources = SubsystemOperations.readResult(result).asList();
-        assertEquals("Additional log-file resource failed to dynamically get added", currentSize + 1, resources.size());
+        assertEquals("Additional log-file resource failed to dynamically get added", ++currentSize, resources.size());
 
         // Test the read-log-file on the
         final ModelNode simpleLogAddress = SUBSYSTEM_ADDRESS.append("log-file", "simple.log").toModelNode();
         op = SubsystemOperations.createOperation("read-log-file", simpleLogAddress);
         testReadLogFile(kernelServices, op, getLogger());
+
+        // Test a log file that uses an expression for the file name
+        final ModelNode expressLogFileHandleAddress = createFileHandlerAddress("expression-log-file").toModelNode();
+        op = SubsystemOperations.createAddOperation(expressLogFileHandleAddress);
+        op.get("file").set(createFileValue("jboss.server.log.dir", "${test.expression.file.name}"));
+        executeOperation(kernelServices, op);
+        result = executeOperation(kernelServices, SubsystemOperations.createReadResourceOperation(address));
+        resources = SubsystemOperations.readResult(result).asList();
+        assertEquals("Expression log-file resource was not resolved", ++currentSize, resources.size());
+        // Check that the resource exists
+        executeOperation(kernelServices, SubsystemOperations.createReadResourceOperation(SUBSYSTEM_ADDRESS.append("log-file", "expression-file.log").toModelNode()));
+        // Remove the resource
+        executeOperation(kernelServices, SubsystemOperations.createRemoveOperation(expressLogFileHandleAddress));
+
 
         // Test on the logging-profile
         final ModelNode profileAddress = SUBSYSTEM_ADDRESS.append("logging-profile", "testProfile").append("log-file", "profile-simple.log").toModelNode();

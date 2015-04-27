@@ -143,21 +143,9 @@ final class HandlerOperations {
                         if (attribute.equals(CommonAttributes.FILE)) {
                             final String fileAttributeName = attribute.getName();
                             if (operation.has(fileAttributeName)) {
-                                final AllowedResourceFiles allowedResourceFiles = AllowedResourceFiles.getInstance();
-                                // Add the new file
-                                if (model.hasDefined(fileAttributeName)) {
-                                    final ModelNode newFile = model.get(fileAttributeName);
-                                    // The file must have a defined relative-to with a value of jboss.server.log.dir
-                                    if (newFile.hasDefined(PathResourceDefinition.RELATIVE_TO.getName()) &&
-                                            newFile.get(PathResourceDefinition.RELATIVE_TO.getName()).asString().equals(ServerEnvironment.SERVER_LOG_DIR)) {
-                                        allowedResourceFiles.addAllowedFileName(PathResourceDefinition.PATH.resolveModelAttribute(context, newFile).asString());
-                                    }
-                                }
-                                // Remove the old file
-                                if (originalModel.hasDefined(fileAttributeName)) {
-                                    final ModelNode originalFile = originalModel.get(fileAttributeName);
-                                    allowedResourceFiles.removeAllowedFileName(PathResourceDefinition.PATH.resolveModelAttribute(context, originalFile).asString());
-                                }
+                                final ModelNode newFile = model.hasDefined(fileAttributeName) ? model.get(fileAttributeName) : new ModelNode();
+                                final ModelNode oldFile = originalModel.hasDefined(fileAttributeName) ? originalModel.get(fileAttributeName) : new ModelNode();
+                                addAllowedFile(context, newFile, oldFile);
                             }
                         }
                     }
@@ -302,11 +290,7 @@ final class HandlerOperations {
                         // Add the new file
                         if (model.hasDefined(fileAttributeName)) {
                             final ModelNode newFile = model.get(fileAttributeName);
-                            // The file must have a defined relative-to with a value of jboss.server.log.dir
-                            if (newFile.hasDefined(PathResourceDefinition.RELATIVE_TO.getName()) &&
-                                    newFile.get(PathResourceDefinition.RELATIVE_TO.getName()).asString().equals(ServerEnvironment.SERVER_LOG_DIR)) {
-                                AllowedResourceFiles.getInstance().addAllowedFileName(PathResourceDefinition.PATH.resolveModelAttribute(context, newFile).asString());
-                            }
+                            addAllowedFile(context, newFile, new ModelNode());
                         }
                     }
                 }
@@ -438,15 +422,7 @@ final class HandlerOperations {
                             restartRequired = Logging.requiresReload(attribute.getFlags());
                             // Check the operation for a file attribute, remove the old file and add the new if required
                             if (attribute.equals(CommonAttributes.FILE)) {
-                                final AllowedResourceFiles allowedResourceFiles = AllowedResourceFiles.getInstance();
-                                // Add the new file
-                                // The file must have a defined relative-to with a value of jboss.server.log.dir
-                                if (value.hasDefined(PathResourceDefinition.RELATIVE_TO.getName()) &&
-                                        value.get(PathResourceDefinition.RELATIVE_TO.getName()).asString().equals(ServerEnvironment.SERVER_LOG_DIR)) {
-                                    allowedResourceFiles.addAllowedFileName(value.get(PathResourceDefinition.PATH.getName()).asString());
-                                }
-                                // Remove the old file
-                                allowedResourceFiles.removeAllowedFileName(originalValue.get(PathResourceDefinition.PATH.getName()).asString());
+                                addAllowedFile(context, value, originalValue);
                             }
                             break;
                         }
@@ -463,6 +439,7 @@ final class HandlerOperations {
         @Override
         protected void revertUpdateToRuntime(final OperationContext context, final ModelNode operation, final String attributeName, final ModelNode valueToRestore, final ModelNode valueToRevert, final ConfigurationPersistence configurationPersistence) throws OperationFailedException {
             super.revertUpdateToRuntime(context, operation, attributeName, valueToRestore, valueToRevert, configurationPersistence);
+            // TODO (jrp) should this be removed since we rollback in the LoggingOperations
             AllowedResourceFiles.getInstance().rollback();
         }
 
@@ -996,6 +973,22 @@ final class HandlerOperations {
                     context.completeStep(ResultHandler.NOOP_RESULT_HANDLER);
                 }
             }, Stage.RUNTIME);
+        }
+    }
+
+    private static void addAllowedFile(final OperationContext context, final ModelNode newFile, final ModelNode oldFile) throws OperationFailedException {
+        final AllowedResourceFiles allowedResourceFiles = AllowedResourceFiles.getInstance();
+        // Add the new file
+        if (newFile.isDefined()) {
+            // The file must have a defined relative-to with a value of jboss.server.log.dir
+            if (newFile.hasDefined(PathResourceDefinition.RELATIVE_TO.getName()) &&
+                    newFile.get(PathResourceDefinition.RELATIVE_TO.getName()).asString().equals(ServerEnvironment.SERVER_LOG_DIR)) {
+                allowedResourceFiles.addAllowedFileName(PathResourceDefinition.PATH.resolveModelAttribute(context, newFile).asString());
+            }
+        }
+        // Remove the old file
+        if (oldFile.isDefined()) {
+            allowedResourceFiles.removeAllowedFileName(PathResourceDefinition.PATH.resolveModelAttribute(context, oldFile).asString());
         }
     }
 }

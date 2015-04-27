@@ -99,6 +99,7 @@ final class LoggingOperations {
                 @Override
                 public void handleResult(final ResultAction resultAction, final OperationContext context, final ModelNode operation) {
                     if (resultAction == ResultAction.KEEP) {
+                        // TODO (jrp) seems a bit odd to have something special for file names
                         AllowedResourceFiles.getInstance().commit();
                         configurationPersistence.commit();
                         if (!LoggingProfileOperations.isLoggingProfileAddress(getAddress(operation))) {
@@ -111,6 +112,8 @@ final class LoggingOperations {
                             }
                         }
                     } else if (resultAction == ResultAction.ROLLBACK) {
+                        // TODO (jrp) seems a bit odd to have something special for file names
+                        AllowedResourceFiles.getInstance().rollback();
                         configurationPersistence.rollback();
                     }
                 }

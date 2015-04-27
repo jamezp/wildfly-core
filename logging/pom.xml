@@ -64,6 +64,7 @@
                     <systemPropertyVariables>
                         <jboss.server.log.dir>${project.build.directory}${file.separator}logs</jboss.server.log.dir>
                         <jboss.server.config.dir>${project.build.directory}${file.separator}config</jboss.server.config.dir>
+                        <test.expression.file.name>expression-file.log</test.expression.file.name>
                     </systemPropertyVariables>
                 </configuration>
             </plugin>

@@ -29,6 +29,7 @@ import java.util.Set;
 /**
  * @author <a href="mailto:jperkins@redhat.com">James R. Perkins</a>
  */
+// TODO (jrp) this approach won't work in admin-only mode unless we handle the file names in the model stage
 class AllowedResourceFiles implements Iterable<String> {
 
     private static class Holder {
@@ -67,6 +68,9 @@ class AllowedResourceFiles implements Iterable<String> {
         uncommittedRemoves.add(fileName);
     }
 
+    /**
+     * Commits
+     */
     public synchronized void commit() {
         allowedFiles.addAll(uncommittedAdds);
         allowedFiles.removeAll(uncommittedRemoves);
