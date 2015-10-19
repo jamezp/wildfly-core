@@ -61,11 +61,13 @@ import org.jboss.modules.ModuleIdentifier;
 import org.jboss.modules.ModuleLoader;
 import org.jboss.staxmapper.XMLElementReader;
 import org.jboss.stdio.StdioContext;
+import org.wildfly.annotations.ServiceProvider;
 
 /**
  * @author Emanuel Muckenhuber
  * @author <a href="mailto:jperkins@redhat.com">James R. Perkins</a>
  */
+@ServiceProvider(Extension.class)
 public class LoggingExtension implements Extension {
 
     private static final String RESOURCE_NAME = LoggingExtension.class.getPackage().getName() + ".LocalDescriptions";

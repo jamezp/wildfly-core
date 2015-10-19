@@ -50,11 +50,20 @@ import org.jboss.as.controller.transform.description.ResourceTransformationDescr
 import org.jboss.as.logging.LoggingOperations.ReadFilterOperationStepHandler;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.ModelType;
+import org.wildfly.annotations.Description;
+import org.wildfly.annotations.Descriptions;
+import org.wildfly.annotations.ResourcePath;
 
 /**
  * @author <a href="mailto:tomaz.cerar@redhat.com">Tomaz Cerar</a>
  * @author <a href="mailto:jperkins@redhat.com">James R. Perkins</a>
  */
+@ResourcePath("logging")
+@Descriptions({
+        @Description("The configuration of the logging subsystem."),
+        @Description(name = "add", value = "Adds the logging subsystem"),
+        @Description(name = "remove", value = "Removes the logging subsystem")
+})
 public class LoggerResourceDefinition extends TransformerResourceDefinition {
 
     public static final String CHANGE_LEVEL_OPERATION_NAME = "change-log-level";
@@ -65,6 +74,12 @@ public class LoggerResourceDefinition extends TransformerResourceDefinition {
 
     static final ResourceDescriptionResolver LOGGER_RESOLVER = LoggingExtension.getResourceDescriptionResolver(LOGGER);
 
+    @Descriptions({
+            @Description(name = "change-log-level", value = "Change the logging level for a logger category."),
+            @Description(name = "change-log-level.deprecated", value = "Use the write-attribute operation.") ,
+            @Description(name = "change-log-level.level", value = "The new level to set.")
+    })
+    @ResourcePath("logger")
     static final OperationDefinition CHANGE_LEVEL_OPERATION = new SimpleOperationDefinitionBuilder(CHANGE_LEVEL_OPERATION_NAME, LOGGER_RESOLVER)
             .setDeprecated(ModelVersion.create(1, 2, 0))
             .setParameters(CommonAttributes.LEVEL)
@@ -127,7 +142,7 @@ public class LoggerResourceDefinition extends TransformerResourceDefinition {
         super(LOGGER_PATH,
                 LoggingExtension.getResourceDescriptionResolver(LOGGER),
                 (includeLegacy ? new LoggerOperations.LoggerAddOperationStepHandler(join(WRITABLE_ATTRIBUTES, LEGACY_ATTRIBUTES))
-                               : new LoggerOperations.LoggerAddOperationStepHandler(WRITABLE_ATTRIBUTES)),
+                        : new LoggerOperations.LoggerAddOperationStepHandler(WRITABLE_ATTRIBUTES)),
                 LoggerOperations.REMOVE_LOGGER);
         writableAttributes = (includeLegacy ? join(WRITABLE_ATTRIBUTES, LEGACY_ATTRIBUTES) : WRITABLE_ATTRIBUTES);
         this.writeHandler = new LoggerOperations.LoggerWriteAttributeHandler(writableAttributes);

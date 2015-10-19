@@ -47,20 +47,43 @@ import org.jboss.as.logging.validators.LogLevelValidator;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.ModelType;
 import org.jboss.logmanager.Level;
+import org.wildfly.annotations.Description;
+import org.wildfly.annotations.ResourcePath;
+import org.wildfly.annotations.ResourcePaths;
 
 
 /**
  * @author Emanuel Muckenhuber
  */
+@ResourcePath("logging")
 public interface CommonAttributes {
 
     // Attributes
+    @Description("Specify whether to append to the target file.")
+    @ResourcePaths(
+            {
+                    @ResourcePath("file-handler"),
+                    @ResourcePath("periodic-rotating-file-handler"),
+                    @ResourcePath("periodic-size-rotating-file-handler"),
+                    @ResourcePath("size-rotating-file-handler")
+            }
+    )
     PropertyAttributeDefinition APPEND = PropertyAttributeDefinition.Builder.of("append", ModelType.BOOLEAN, true)
             .setAllowExpression(true)
             .setAttributeMarshaller(ElementAttributeMarshaller.VALUE_ATTRIBUTE_MARSHALLER)
             .setDefaultValue(new ModelNode(true))
             .build();
 
+    @Description("Automatically flush after each write.")
+    @ResourcePaths(
+            {
+                    @ResourcePath("console-handler"),
+                    @ResourcePath("file-handler"),
+                    @ResourcePath("periodic-rotating-file-handler"),
+                    @ResourcePath("periodic-size-rotating-file-handler"),
+                    @ResourcePath("size-rotating-file-handler")
+            }
+    )
     PropertyAttributeDefinition AUTOFLUSH = PropertyAttributeDefinition.Builder.of("autoflush", ModelType.BOOLEAN, true)
             .setAllowExpression(true)
             .setDefaultValue(new ModelNode(true))
@@ -72,11 +95,35 @@ public interface CommonAttributes {
             .setFlags(Flag.RESTART_RESOURCE_SERVICES)
             .build();
 
+    @Description("If set to true the handler is enabled and functioning as normal, if set to false the handler is ignored when processing log messages.")
+    @ResourcePaths(
+            {
+                    @ResourcePath("async-handler"),
+                    @ResourcePath("console-handler"),
+                    @ResourcePath("custom-handler"),
+                    @ResourcePath("file-handler"),
+                    @ResourcePath("periodic-rotating-file-handler"),
+                    @ResourcePath("periodic-size-rotating-file-handler"),
+                    @ResourcePath("size-rotating-file-handler"),
+                    @ResourcePath("syslog-handler")
+            }
+    )
     PropertyAttributeDefinition ENABLED = PropertyAttributeDefinition.Builder.of("enabled", ModelType.BOOLEAN, true)
             .setAllowExpression(true)
             .setDefaultValue(new ModelNode(true))
             .build();
 
+    @Description("The character encoding used by this Handler.")
+    @ResourcePaths(
+            {
+                    @ResourcePath("console-handler"),
+                    @ResourcePath("custom-handler"),
+                    @ResourcePath("file-handler"),
+                    @ResourcePath("periodic-rotating-file-handler"),
+                    @ResourcePath("periodic-size-rotating-file-handler"),
+                    @ResourcePath("size-rotating-file-handler")
+            }
+    )
     PropertyAttributeDefinition ENCODING = PropertyAttributeDefinition.Builder.of("encoding", ModelType.STRING, true)
             .setAllowExpression(true)
             .setAttributeMarshaller(ElementAttributeMarshaller.VALUE_ATTRIBUTE_MARSHALLER)
