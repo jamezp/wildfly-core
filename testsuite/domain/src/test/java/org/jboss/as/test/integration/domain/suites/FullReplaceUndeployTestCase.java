@@ -86,6 +86,45 @@ public class FullReplaceUndeployTestCase {
         testDeployment(archive);
     }
 
+    @Test
+    public void testMultiArchiveRedeploy() throws Exception {
+        final ModelControllerClient client = domainMasterLifecycleUtil.getDomainClient();
+        final String deploymentName1 = "test-deploy-1.jar";
+        final String deploymentName2 = "test-deploy-2.jar";
+        final JavaArchive archive1 = ShrinkWrap.create(JavaArchive.class, deploymentName1)
+                .add(EmptyAsset.INSTANCE, "META-INF/MANIFEST.MF");
+        final JavaArchive archive2 = ShrinkWrap.create(JavaArchive.class, deploymentName2)
+                .add(EmptyAsset.INSTANCE, "META-INF/MANIFEST.MF");
+
+        deploy(client, archive1, archive2);
+        final byte[] originalHash1 = readDeploymentHash(client, deploymentName1);
+        final byte[] originalHash2 = readDeploymentHash(client, deploymentName2);
+        final long originalEnabledTime1 = readLastEnabledTime(client, deploymentName1);
+        final long originalEnabledTime2 = readLastEnabledTime(client, deploymentName2);
+
+        // Redeploy the same archives
+        redeploy(client, archive1, archive2);
+        final byte[] newHash1 = readDeploymentHash(client, deploymentName1);
+        final byte[] newHash2 = readDeploymentHash(client, deploymentName2);
+        final long newEnabledTime1 = readLastEnabledTime(client, deploymentName1);
+        final long newEnabledTime2 = readLastEnabledTime(client, deploymentName2);
+
+        Assert.assertArrayEquals(originalHash1, newHash1);
+        Assert.assertArrayEquals(originalHash2, newHash2);
+
+        final boolean firstTimeMatches = (originalEnabledTime1 == newEnabledTime1);
+        final boolean secondTimeMatches = (originalEnabledTime2 == newEnabledTime2);
+        if (firstTimeMatches && !secondTimeMatches) {
+            Assert.fail(String.format("First time matches when it should have changed %d. Second time is different as expected: %d -- %d",
+                    originalEnabledTime1, originalEnabledTime2, newEnabledTime2));
+        } else if (!firstTimeMatches && secondTimeMatches) {
+            Assert.fail(String.format("Second time matches when it should have changed %d. First time is different as expected: %d -- %d",
+                    originalEnabledTime2, originalEnabledTime1, newEnabledTime1));
+        } else {
+            Assert.fail("Both times match, but neither should match.");
+        }
+    }
+
     private void testDeployment(final Archive<?> archive) throws IOException {
         final ModelControllerClient client = domainMasterLifecycleUtil.getDomainClient();
         final ModelNode readServerSubsystems = Operations.createOperation(ClientConstants.READ_CHILDREN_NAMES_OPERATION,
@@ -153,6 +192,11 @@ public class FullReplaceUndeployTestCase {
 
     private static Operation createDeployAddOperation(final InputStream content, final String name, final String runtimeName) {
         final Operations.CompositeOperationBuilder builder = Operations.CompositeOperationBuilder.create(true);
+        addDeployAddOperation(builder, content, name, runtimeName);
+        return builder.build();
+    }
+
+    private static void addDeployAddOperation(final Operations.CompositeOperationBuilder builder, final InputStream content, final String name, final String runtimeName) {
         final ModelNode address = createAddress(DEPLOYMENT, name);
         final ModelNode addOperation = createAddOperation(address);
         if (runtimeName != null) {
@@ -168,13 +212,13 @@ public class FullReplaceUndeployTestCase {
             op.get(RUNTIME_NAME).set(runtimeName);
         }
         builder.addStep(op);
-        return builder.build();
     }
 
     private static void addContent(final OperationBuilder builder, final ModelNode op, final InputStream content) {
         final ModelNode contentNode = op.get(CONTENT);
         final ModelNode contentItem = contentNode.get(0);
-        contentItem.get(ClientConstants.INPUT_STREAM_INDEX).set(0);
+        // The stream count is 0 based, add the current count before adding the stream
+        contentItem.get(ClientConstants.INPUT_STREAM_INDEX).set(builder.getInputStreamCount());
         builder.addInputStream(content);
     }
 
@@ -199,6 +243,42 @@ public class FullReplaceUndeployTestCase {
             throw new IllegalStateException(String.format("Could not execute operation '%s'", op), e);
         }
         return false;
+    }
+
+    private static ModelNode deploy(final ModelControllerClient client, final Archive<?>... deployments) throws IOException {
+        final Operations.CompositeOperationBuilder builder = Operations.CompositeOperationBuilder.create(true);
+        for (Archive<?> deployment : deployments) {
+            addDeployAddOperation(builder, deployment.as(ZipExporter.class).exportAsInputStream(), deployment.getName(), null);
+        }
+        return execute(client, builder.build());
+    }
+
+    private static ModelNode redeploy(final ModelControllerClient client, final Archive<?>... deployments) throws IOException {
+        final Operations.CompositeOperationBuilder builder = Operations.CompositeOperationBuilder.create(true);
+        for (Archive<?> deployment : deployments) {
+            final ModelNode op = createOperation(DEPLOYMENT_FULL_REPLACE_OPERATION);
+            op.get(NAME).set(deployment.getName());
+            addContent(builder, op, deployment.as(ZipExporter.class).exportAsInputStream());
+            op.get("enabled").set(true);
+            builder.addStep(op);
+        }
+        return execute(client, builder.build());
+    }
+
+    private static byte[] readDeploymentHash(final ModelControllerClient client, final String deploymentName) throws IOException {
+        final ModelNode op = Operations.createReadAttributeOperation(Operations.createAddress(ClientConstants.DEPLOYMENT, deploymentName), ClientConstants.CONTENT);
+        final ModelNode response = execute(client, op);
+        if (response.get(0).hasDefined("hash")) {
+            return response.get(0).get("hash").asBytes();
+        }
+        return new byte[0];
+    }
+
+    private static long readLastEnabledTime(final ModelControllerClient client, final String deploymentName) throws IOException {
+        final ModelNode address = Operations.createAddress("host", "master", "server", "main-one", "deployment", deploymentName);
+        final ModelNode op = Operations.createReadAttributeOperation(address, "enabled-time");
+        final ModelNode response = execute(client, op);
+        return response.isDefined() ? response.asLong() : 0L;
     }
 
 }
