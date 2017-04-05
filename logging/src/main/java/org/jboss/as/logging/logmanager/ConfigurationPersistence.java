@@ -372,6 +372,7 @@ public class ConfigurationPersistence implements Configurator, LogContextConfigu
      * @param context the context used to determine the file location.
      */
     public void writeConfiguration(final OperationContext context) {
+        // TODO (jrp) remove the FileResolver in favor of, passing in?, the PathManager
         final String loggingConfig;
         switch (context.getProcessType()) {
             case DOMAIN_SERVER: {
@@ -406,7 +407,7 @@ public class ConfigurationPersistence implements Configurator, LogContextConfigu
                         final FileLock lock = out.getChannel().lock();
                         try {
                             out.write(NOTE_MESSAGE);
-                            config.writeConfiguration(out);
+                            config.writeConfiguration(out, true);
                         } finally {
                             // The write should close the stream which would release the lock this check ensures the
                             // lock will be released

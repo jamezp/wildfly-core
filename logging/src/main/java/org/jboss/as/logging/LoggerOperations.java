@@ -32,14 +32,16 @@ import static org.jboss.as.logging.Logging.createOperationFailure;
 import static org.jboss.as.logging.RootLoggerResourceDefinition.ROOT_LOGGER_ATTRIBUTE_NAME;
 
 import java.util.ArrayList;
-import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import org.jboss.as.controller.AttributeDefinition;
 import org.jboss.as.controller.OperationContext;
 import org.jboss.as.controller.OperationFailedException;
 import org.jboss.as.controller.OperationStepHandler;
 import org.jboss.as.controller.PathAddress;
+import org.jboss.as.controller.parsing.ParseUtils;
 import org.jboss.as.controller.registry.Resource;
 import org.jboss.as.logging.logging.LoggingLogger;
 import org.jboss.dmr.ModelNode;
@@ -121,7 +123,9 @@ final class LoggerOperations {
             }
 
             for (AttributeDefinition attribute : attributes) {
-                handleProperty(attribute, context, model, configuration);
+                final ModelNode value = model.get(attribute.getName());
+                final ModelNode resolvedValue = attribute.resolveModelAttribute(context, model);
+                handleProperty(attribute, value, resolvedValue, configuration);
             }
         }
     }
@@ -137,21 +141,22 @@ final class LoggerOperations {
         }
 
         @Override
-        protected boolean applyUpdate(final OperationContext context, final String attributeName, final String addressName, final ModelNode value, final LogContextConfiguration logContextConfiguration) throws OperationFailedException {
+        protected boolean applyUpdate(final OperationContext context, final String attributeName, final String addressName, final ModelNode unresolvedValue, final ModelNode resolvedValue, final LogContextConfiguration logContextConfiguration) throws OperationFailedException {
             final String loggerName = getLogManagerLoggerName(addressName);
             if (logContextConfiguration.getLoggerNames().contains(loggerName)) {
                 final LoggerConfiguration configuration = logContextConfiguration.getLoggerConfiguration(loggerName);
                 if (LEVEL.getName().equals(attributeName)) {
-                    handleProperty(LEVEL, context, value, configuration, false);
+                    handleProperty(LEVEL, unresolvedValue, resolvedValue, configuration);
                 } else if (FILTER.getName().equals(attributeName)) {
                     // Filter should be replaced by the filter-spec in the super class
-                    handleProperty(FILTER_SPEC, context, value, configuration, false);
+                    // TODO (jrp) will this work?
+                    handleProperty(FILTER_SPEC, unresolvedValue, resolvedValue, configuration);
                 } else if (FILTER_SPEC.getName().equals(attributeName)) {
-                    handleProperty(FILTER_SPEC, context, value, configuration, false);
+                    handleProperty(FILTER_SPEC, unresolvedValue, resolvedValue, configuration);
                 } else if (HANDLERS.getName().equals(attributeName)) {
-                    handleProperty(HANDLERS, context, value, configuration, false);
+                    handleProperty(HANDLERS, unresolvedValue, resolvedValue, configuration);
                 } else if (USE_PARENT_HANDLERS.getName().equals(attributeName)) {
-                    handleProperty(USE_PARENT_HANDLERS, context, value, configuration, false);
+                    handleProperty(USE_PARENT_HANDLERS, unresolvedValue, resolvedValue, configuration);
                 }
             }
             return false;
@@ -259,31 +264,46 @@ final class LoggerOperations {
 
         @Override
         public void performRuntime(final OperationContext context, final ModelNode operation, final LoggerConfiguration configuration, final String name, final ModelNode model) throws OperationFailedException {
-            handleProperty(LEVEL, context, model, configuration);
+            final ModelNode value = model.get(LEVEL.getName());
+            final ModelNode resolvedValue = LEVEL.resolveModelAttribute(context, model);
+            handleProperty(LEVEL, value, resolvedValue, configuration);
         }
     };
 
-    private static void handleProperty(final AttributeDefinition attribute, final OperationContext context, final ModelNode model,
+    private static void handleProperty(final AttributeDefinition attribute, final ModelNode attributeValue, final ModelNode resolvedValue,
                                        final LoggerConfiguration configuration) throws OperationFailedException {
-        handleProperty(attribute, context, model, configuration, true);
-    }
-
-    private static void handleProperty(final AttributeDefinition attribute, final OperationContext context, final ModelNode model,
-                                       final LoggerConfiguration configuration, final boolean resolveValue) throws OperationFailedException {
+        final boolean isExpression = attributeValue.isDefined() && ParseUtils.isExpression(attributeValue.asString());
         if (FILTER_SPEC.equals(attribute)) {
-            final ModelNode valueNode = (resolveValue ? FILTER_SPEC.resolveModelAttribute(context, model) : model);
-            final String resolvedValue = (valueNode.isDefined() ? valueNode.asString() : null);
-            configuration.setFilter(resolvedValue);
+            if (isExpression) {
+                configuration.setFilter(attributeValue.asString(), resolvedValue.asString());
+            } else if (resolvedValue.isDefined()) {
+                configuration.setFilter(resolvedValue.asString());
+            } else {
+                configuration.setFilter(null);
+            }
         } else if (LEVEL.equals(attribute)) {
-            final String resolvedValue = (resolveValue ? LEVEL.resolvePropertyValue(context, model) : LEVEL.resolver().resolveValue(context, model));
-            configuration.setLevel(resolvedValue);
+            if (isExpression) {
+                configuration.setLevel(attributeValue.asString(), resolvedValue.asString());
+            } else if (resolvedValue.isDefined()) {
+                configuration.setLevel(resolvedValue.asString());
+            } else {
+                configuration.setLevel(LEVEL.getDefaultValue().asString());
+            }
         } else if (HANDLERS.equals(attribute)) {
-            final Collection<String> resolvedValue = (resolveValue ? HANDLERS.resolvePropertyValue(context, model) : HANDLERS.resolver().resolveValue(context, model));
-            configuration.setHandlerNames(resolvedValue);
+            if (resolvedValue.isDefined()) {
+                // TODO (jrp) this should probably be better handled
+                configuration.setHandlerNames(resolvedValue.asList().stream().map(ModelNode::asString).collect(Collectors.toList()));
+            } else {
+                configuration.setHandlerNames(Collections.emptyList());
+            }
         } else if (USE_PARENT_HANDLERS.equals(attribute)) {
-            final ModelNode useParentHandlers = (resolveValue ? USE_PARENT_HANDLERS.resolveModelAttribute(context, model) : model);
-            final Boolean resolvedValue = (useParentHandlers.isDefined() ? useParentHandlers.asBoolean() : null);
-            configuration.setUseParentHandlers(resolvedValue);
+            if (isExpression) {
+                configuration.setUseParentHandlers(attributeValue.asString(), resolvedValue.asBoolean());
+            } else if (resolvedValue.isDefined()) {
+                configuration.setUseParentHandlers(resolvedValue.asBoolean());
+            } else {
+                configuration.setUseParentHandlers((Boolean) null);
+            }
         }
     }
 

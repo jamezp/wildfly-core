@@ -36,6 +36,7 @@ import org.jboss.as.controller.ObjectTypeAttributeDefinition;
 import org.jboss.as.controller.OperationFailedException;
 import org.jboss.as.controller.SimpleAttributeDefinition;
 import org.jboss.as.controller.SimpleAttributeDefinitionBuilder;
+import org.jboss.as.controller.SimpleListAttributeDefinition;
 import org.jboss.as.controller.SimpleMapAttributeDefinition;
 import org.jboss.as.controller.operations.validation.ObjectTypeValidator;
 import org.jboss.as.controller.registry.AttributeAccess.Flag;
@@ -82,7 +83,7 @@ public interface CommonAttributes {
             .setAttributeMarshaller(ElementAttributeMarshaller.VALUE_ATTRIBUTE_MARSHALLER)
             .build();
 
-    PropertyObjectTypeAttributeDefinition FILE = PropertyObjectTypeAttributeDefinition.Builder.of("file", RELATIVE_TO, PATH)
+    FileTypeAttributeDefinition FILE = FileTypeAttributeDefinition.Builder.of("file", RELATIVE_TO, PATH)
             .setAllowExpression(false)
             .setAllowNull(false)
             .setAttributeMarshaller(new DefaultAttributeMarshaller() {
@@ -99,6 +100,7 @@ public interface CommonAttributes {
             })
             .setCorrector(FileCorrector.INSTANCE)
             .setPropertyName("fileName")
+            // TODO (jrp) we need to remove this
             .setResolver(FileResolver.INSTANCE)
             .setValidator(new FileValidator())
             .build();
@@ -114,9 +116,10 @@ public interface CommonAttributes {
             .setAttributeMarshaller(ElementAttributeMarshaller.NAME_ATTRIBUTE_MARSHALLER)
             .build();
 
-    LogHandlerListAttributeDefinition HANDLERS = LogHandlerListAttributeDefinition.Builder.of("handlers")
+    SimpleListAttributeDefinition HANDLERS = SimpleListAttributeDefinition.Builder.of("handlers", CommonAttributes.HANDLER)
             .setAllowExpression(false)
-            .setAllowNull(true)
+            .setAttributeMarshaller(HandlersAttributeMarshaller.INSTANCE)
+            .setRequired(false)
             .build();
 
     SimpleAttributeDefinition HANDLER_NAME = SimpleAttributeDefinitionBuilder.create("name", ModelType.STRING, true).build();

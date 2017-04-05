@@ -42,6 +42,7 @@ import org.jboss.msc.service.ServiceName;
  *
  * @author <a href="mailto:jperkins@redhat.com">James R. Perkins</a>
  */
+@Deprecated
 public class FileResolver implements ModelNodeResolver<String> {
 
     public static final FileResolver INSTANCE = new FileResolver();
@@ -64,6 +65,11 @@ public class FileResolver implements ModelNodeResolver<String> {
         final Path file = Paths.get(result);
         if (Files.exists(file) && Files.isDirectory(file)) {
             throw LoggingLogger.ROOT_LOGGER.invalidLogFile(file.normalize().toString());
+        }
+        // TODO (jrp) this could likely be handled better
+        // Make an expression if we're using a relative-to attribute
+        if (relativeToNode.isDefined()) {
+            result = "${" + relativeToNode.asString() + ":" + resolve(context, relativeToNode.asString()) + "}" + "/" + pathNode.asString();
         }
         return result;
     }
@@ -91,5 +97,16 @@ public class FileResolver implements ModelNodeResolver<String> {
             return null;
         }
         return controller.getValue().resolveRelativePathEntry(path, relativeToPath);
+    }
+
+    private String resolve(final OperationContext context, final String relativeToPath) {
+        // TODO it would be better if this came via the ExtensionContext
+        ServiceName pathMgrSvc = context.getCapabilityServiceName("org.wildfly.management.path-manager", PathManager.class);
+        @SuppressWarnings("unchecked")
+        final ServiceController<PathManager> controller = (ServiceController<PathManager>) context.getServiceRegistry(false).getService(pathMgrSvc);
+        if (controller == null) {
+            return null;
+        }
+        return controller.getValue().getPathEntry(relativeToPath).resolvePath();
     }
 }

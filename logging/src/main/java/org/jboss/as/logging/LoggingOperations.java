@@ -23,6 +23,7 @@
 package org.jboss.as.logging;
 
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OP_ADDR;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.VALUE;
 
 import org.jboss.as.controller.AbstractWriteAttributeHandler;
 import org.jboss.as.controller.AttributeDefinition;
@@ -315,7 +316,7 @@ final class LoggingOperations {
             }
             final LogContextConfiguration logContextConfiguration = configurationPersistence.getLogContextConfiguration();
             handbackHolder.setHandback(configurationPersistence);
-            final boolean restartRequired = applyUpdate(context, attributeName, name, resolvedValue, logContextConfiguration);
+            final boolean restartRequired = applyUpdate(context, attributeName, name, operation.get(VALUE), resolvedValue, logContextConfiguration);
             addCommitStep(context, configurationPersistence);
             return restartRequired;
         }
@@ -326,14 +327,15 @@ final class LoggingOperations {
          * @param context                 the operation context
          * @param attributeName           the name of the attribute being written
          * @param addressName             the name of the handler or logger
-         * @param value                   the value to set the attribute to
+         * @param unresolvedValue         the unresolved value which may be an expression
+         * @param resolvedValue           the resolved value for the attribute
          * @param logContextConfiguration the log context configuration
          *
          * @return {@code true} if a restart is required, otherwise {@code false}
          *
          * @throws OperationFailedException if an error occurs
          */
-        protected abstract boolean applyUpdate(final OperationContext context, final String attributeName, final String addressName, final ModelNode value, final LogContextConfiguration logContextConfiguration) throws OperationFailedException;
+        protected abstract boolean applyUpdate(final OperationContext context, final String attributeName, final String addressName, final ModelNode unresolvedValue, final ModelNode resolvedValue, final LogContextConfiguration logContextConfiguration) throws OperationFailedException;
 
         @Override
         protected void revertUpdateToRuntime(final OperationContext context, final ModelNode operation, final String attributeName, final ModelNode valueToRestore, final ModelNode valueToRevert, final ConfigurationPersistence configurationPersistence) throws OperationFailedException {

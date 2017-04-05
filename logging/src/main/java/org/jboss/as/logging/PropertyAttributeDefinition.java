@@ -46,11 +46,13 @@ public class PropertyAttributeDefinition extends SimpleAttributeDefinition imple
 
     @Override
     public void setPropertyValue(final OperationContext context, final ModelNode model, final PropertyConfigurable configuration) throws OperationFailedException {
-        final String value = resolvePropertyValue(context, model);
-        if (value == null) {
-            configuration.removeProperty(propertyName);
-        } else {
-            configuration.setPropertyValueString(propertyName, value);
+        final ModelNode attributeValue = model.get(getName());
+        if (attributeValue.isDefined()) {
+            if (attributeValue.getType() == ModelType.EXPRESSION) {
+                configuration.setPropertyValueExpression(getPropertyName(), attributeValue.asString(), resolveModelAttribute(context, model).asString());
+            } else {
+                configuration.setPropertyValueString(getPropertyName(), attributeValue.asString());
+            }
         }
     }
 

@@ -29,6 +29,9 @@ import org.jboss.dmr.ModelNode;
 /**
  * @author <a href="mailto:jperkins@redhat.com">James R. Perkins</a>
  */
+// TODO (jrp) it would likely be better just to have a way to set the property, the value type won't matter
+@Deprecated
+@FunctionalInterface
 public interface ModelNodeResolver<T> {
 
     /**

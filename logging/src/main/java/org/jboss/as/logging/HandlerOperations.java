@@ -22,6 +22,8 @@
 
 package org.jboss.as.logging;
 
+import static org.jboss.as.controller.services.path.PathResourceDefinition.PATH;
+import static org.jboss.as.controller.services.path.PathResourceDefinition.RELATIVE_TO;
 import static org.jboss.as.logging.AbstractHandlerDefinition.FORMATTER;
 import static org.jboss.as.logging.AbstractHandlerDefinition.NAMED_FORMATTER;
 import static org.jboss.as.logging.AsyncHandlerResourceDefinition.QUEUE_LENGTH;
@@ -42,10 +44,12 @@ import static org.jboss.as.logging.PatternFormatterResourceDefinition.PATTERN;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Handler;
+import java.util.stream.Collectors;
 
 import org.apache.log4j.Appender;
 import org.jboss.as.controller.AttributeDefinition;
@@ -55,11 +59,12 @@ import org.jboss.as.controller.OperationContext.Stage;
 import org.jboss.as.controller.OperationFailedException;
 import org.jboss.as.controller.OperationStepHandler;
 import org.jboss.as.controller.PathAddress;
+import org.jboss.as.controller.parsing.ParseUtils;
 import org.jboss.as.controller.registry.Resource;
+import org.jboss.as.controller.services.path.PathManager;
 import org.jboss.as.logging.logging.LoggingLogger;
 import org.jboss.as.logging.logmanager.Log4jAppenderHandler;
 import org.jboss.as.logging.logmanager.PropertySorter;
-import org.jboss.as.logging.resolvers.ModelNodeResolver;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.Property;
 import org.jboss.logmanager.LogContext;
@@ -76,6 +81,8 @@ import org.jboss.logmanager.handlers.AsyncHandler;
 import org.jboss.modules.ModuleIdentifier;
 import org.jboss.modules.ModuleLoadException;
 import org.jboss.modules.ModuleLoader;
+import org.jboss.msc.service.ServiceController;
+import org.jboss.msc.service.ServiceName;
 
 /**
  * @author <a href="mailto:david.lloyd@redhat.com">David M. Lloyd</a>
@@ -134,7 +141,7 @@ final class HandlerOperations {
                 for (AttributeDefinition attribute : attributes) {
                     // Only update if the attribute is on the operation
                     if (operation.has(attribute.getName())) {
-                        handleProperty(attribute, context, model, logContextConfiguration, configuration);
+                        handleProperty(attribute, context, operation.get(attribute.getName()), attribute.resolveModelAttribute(context,model), logContextConfiguration, configuration);
                         restartRequired = restartRequired || Logging.requiresRestart(attribute.getFlags());
                         reloadRequired = reloadRequired || Logging.requiresReload(attribute.getFlags());
                     }
@@ -271,7 +278,7 @@ final class HandlerOperations {
                 }
 
                 if (!skip)
-                    handleProperty(attribute, context, model, logContextConfiguration, configuration);
+                    handleProperty(attribute, context, operation.get(attribute.getName()), attribute.resolveModelAttribute(context, model), logContextConfiguration, configuration);
             }
 
             // It's important that properties are written in the correct order, reorder the properties if
@@ -349,24 +356,24 @@ final class HandlerOperations {
         }
 
         @Override
-        protected boolean applyUpdate(final OperationContext context, final String attributeName, final String addressName, final ModelNode value, final LogContextConfiguration logContextConfiguration) throws OperationFailedException {
+        protected boolean applyUpdate(final OperationContext context, final String attributeName, final String addressName, final ModelNode unresolvedValue, final ModelNode resolvedValue, final LogContextConfiguration logContextConfiguration) throws OperationFailedException {
             boolean restartRequired = false;
             if (logContextConfiguration.getHandlerNames().contains(addressName)) {
                 final HandlerConfiguration configuration = logContextConfiguration.getHandlerConfiguration(addressName);
                 if (LEVEL.getName().equals(attributeName)) {
-                    handleProperty(LEVEL, context, value, logContextConfiguration, configuration, false);
-                    handleProperty(LEVEL, context, value, logContextConfiguration, configuration, false);
+                    handleProperty(LEVEL, context, unresolvedValue, resolvedValue, logContextConfiguration, configuration);
                 } else if (FILTER.getName().equals(attributeName)) {
                     // Filter should be replaced by the filter-spec in the super class
-                    handleProperty(FILTER_SPEC, context, value, logContextConfiguration, configuration, false);
+                    // TODO (jrp) will this work?
+                    handleProperty(FILTER_SPEC, context, unresolvedValue, resolvedValue, logContextConfiguration, configuration);
                 } else if (FILTER_SPEC.getName().equals(attributeName)) {
-                    handleProperty(FILTER_SPEC, context, value, logContextConfiguration, configuration, false);
+                    handleProperty(FILTER_SPEC, context, unresolvedValue, resolvedValue, logContextConfiguration, configuration);
                 } else if (FORMATTER.getName().equals(attributeName)) {
-                    handleProperty(FORMATTER, context, value, logContextConfiguration, configuration, false);
+                    handleProperty(FORMATTER, context, unresolvedValue, resolvedValue, logContextConfiguration, configuration);
                 } else if (ENCODING.getName().equals(attributeName)) {
-                    handleProperty(ENCODING, context, value, logContextConfiguration, configuration, false);
+                    handleProperty(ENCODING, context, unresolvedValue, resolvedValue, logContextConfiguration, configuration);
                 } else if (SUBHANDLERS.getName().equals(attributeName)) {
-                    handleProperty(SUBHANDLERS, context, value, logContextConfiguration, configuration, false);
+                    handleProperty(SUBHANDLERS, context, unresolvedValue, resolvedValue, logContextConfiguration, configuration);
                 } else if (PROPERTIES.getName().equals(attributeName)) {
                     final PropertyConfigurable propertyConfigurable;
                     // A POJO configuration will have the same name as the handler
@@ -380,8 +387,8 @@ final class HandlerOperations {
                         // set on the POJO which is the actual appender
                         configuration.setPropertyValueString(Log4jAppenderHandler.ACTIVATOR_PROPERTY_METHOD_NAME, "");
                     }
-                    if (value.isDefined()) {
-                        for (Property property : value.asPropertyList()) {
+                    if (resolvedValue.isDefined()) {
+                        for (Property property : resolvedValue.asPropertyList()) {
                             propertyConfigurable.setPropertyValueString(property.getName(), property.getValue().asString());
                         }
                     } else {
@@ -400,7 +407,7 @@ final class HandlerOperations {
                 } else {
                     for (AttributeDefinition attribute : getAttributes()) {
                         if (attribute.getName().equals(attributeName)) {
-                            handleProperty(attribute, context, value, logContextConfiguration, configuration, false);
+                            handleProperty(attribute, context, unresolvedValue, resolvedValue, logContextConfiguration, configuration);
                             restartRequired = Logging.requiresReload(attribute.getFlags());
                             break;
                         }
@@ -595,60 +602,45 @@ final class HandlerOperations {
     /**
      * Handle updating the configuration.
      *
-     * @param attribute               the attribute definition
-     * @param context                 the context of the operation
      * @param model                   the model to update
-     * @param logContextConfiguration the log context configuration
-     * @param configuration           the handler configuration
-     *
-     * @throws OperationFailedException if an error occurs
-     */
-    private static void handleProperty(final AttributeDefinition attribute, final OperationContext context, final ModelNode model,
-                                       final LogContextConfiguration logContextConfiguration, final HandlerConfiguration configuration)
-            throws OperationFailedException {
-        handleProperty(attribute, context, model, logContextConfiguration, configuration, true);
-    }
-
-    /**
-     * Handle updating the configuration.
-     *
-     * @param attribute               the attribute definition
-     * @param context                 the context of the operation
-     * @param model                   the model to update
-     * @param logContextConfiguration the log context configuration
-     * @param configuration           the handler configuration
      * @param resolveValue            {@code true} if the value should be resolved via the attribute, otherwise {@code
      *                                false} if the value is already resolved.
      *
+     * @param attribute               the attribute definition
+     * @param context                 the context of the operation
+     * @param logContextConfiguration the log context configuration
+     * @param configuration           the handler configuration
      * @throws OperationFailedException if an error occurs
      */
-    private static void handleProperty(final AttributeDefinition attribute, final OperationContext context, final ModelNode model,
-                                       final LogContextConfiguration logContextConfiguration, final HandlerConfiguration configuration, final boolean resolveValue)
+    private static void handleProperty(final AttributeDefinition attribute, final OperationContext context, final ModelNode attributeValue, final ModelNode resolvedValue,
+                                       final LogContextConfiguration logContextConfiguration, final HandlerConfiguration configuration)
             throws OperationFailedException {
+        // TODO (jrp) undefined values need to be handled
+        final boolean isExpression = attributeValue.isDefined() && ParseUtils.isExpression(attributeValue.asString());
 
         if (attribute.getName().equals(ENABLED.getName())) {
-            final boolean value = ((resolveValue ? ENABLED.resolveModelAttribute(context, model).asBoolean() : model.asBoolean()));
+            // TODO (jrp) handle expressions
+            //final boolean value = ((resolveValue ? ENABLED.resolveModelAttribute(context, model).asBoolean() : model.asBoolean()));
+            final boolean value = resolvedValue.asBoolean();
             if (value) {
                 enableHandler(logContextConfiguration, configuration.getName());
             } else {
                 disableHandler(logContextConfiguration, configuration.getName());
             }
         } else if (attribute.getName().equals(ENCODING.getName())) {
-            final String resolvedValue = (resolveValue ? ENCODING.resolvePropertyValue(context, model) : model.isDefined() ? model.asString() : null);
-            configuration.setEncoding(resolvedValue);
-        } else if (attribute.getName().equals(FORMATTER.getName())) {
-            final String formatterName = configuration.getName();
-            // Use a formatter only if a named-formatter is not defined, note too that if explicitly undefining the named-formatter
-            // the formatter pattern will be used
-            if (model.hasDefined(NAMED_FORMATTER.getName())) {
-                final ModelNode valueNode = (resolveValue ? NAMED_FORMATTER.resolveModelAttribute(context, model) : model);
-                final String resolvedValue = (valueNode.isDefined() ? valueNode.asString() : null);
-                configuration.setFormatterName(resolvedValue);
-                // Check the current formatter name, if it's the same name as the handler, remove the old formatter
-                if (!formatterName.equals(resolvedValue) && logContextConfiguration.getFormatterNames().contains(formatterName)) {
-                    logContextConfiguration.removeFormatterConfiguration(formatterName);
-                }
+            if (isExpression) {
+                configuration.setEncoding(attributeValue.asString(), resolvedValue.asString());
+            } else if (resolvedValue.isDefined()) {
+                configuration.setEncoding(resolvedValue.asString());
             } else {
+                // TODO (jrp) will this work?
+                configuration.setEncoding(null);
+            }
+        } else if (attribute.getName().equals(FORMATTER.getName())) {
+            // TODO (jrp) validate both formatter and named-formatter are not defined
+            if (attributeValue.isDefined()) {
+                // TODO (jrp) this won't work if the named-formatter is undefined and we want to use the default value
+                final String formatterName = configuration.getName();
                 // Use a formatter only if a named-formatter is not defined or the named-formatter was explicitly undefined
                 final FormatterConfiguration fmtConfig;
                 if (logContextConfiguration.getFormatterNames().contains(formatterName)) {
@@ -656,48 +648,50 @@ final class HandlerOperations {
                 } else {
                     fmtConfig = logContextConfiguration.addFormatterConfiguration(null, PatternFormatter.class.getName(), formatterName, PATTERN.getPropertyName());
                 }
-                final String resolvedValue = (resolveValue ? FORMATTER.resolvePropertyValue(context, model) : model.asString());
-                fmtConfig.setPropertyValueString(PATTERN.getPropertyName(), resolvedValue);
-                configuration.setFormatterName(formatterName);
+                if (isExpression) {
+                    fmtConfig.setPropertyValueExpression(PATTERN.getPropertyName(), attributeValue.asString(), resolvedValue.asString());
+                } else {
+                    fmtConfig.setPropertyValueString(PATTERN.getPropertyName(), resolvedValue.asString());
+                }
             }
         } else if (attribute.getName().equals(NAMED_FORMATTER.getName())) {
-            final String formatterName = configuration.getName();
-            final ModelNode valueNode = (resolveValue ? NAMED_FORMATTER.resolveModelAttribute(context, model) : model);
-            // If the value not is undefined, this may have come from an undefine-attribute operation
-            if (valueNode.isDefined()) {
-                final String resolvedValue = valueNode.asString();
-                configuration.setFormatterName(resolvedValue);
+            // TODO (jrp) validate both formatter and named-formatter are not defined
+            if (attributeValue.isDefined()) {
+                // TODO (jrp) this won't work if the named-formatter is undefined and we want to use the default value
+                final String formatterName = configuration.getName();
+                configuration.setFormatterName(resolvedValue.asString());
                 // Check the current formatter name, if it's the same name as the handler, remove the old formatter
-                if (!formatterName.equals(resolvedValue) && logContextConfiguration.getFormatterNames().contains(formatterName)) {
+                if (!formatterName.equals(resolvedValue.asString()) && logContextConfiguration.getFormatterNames().contains(formatterName)) {
                     logContextConfiguration.removeFormatterConfiguration(formatterName);
-                }
-            } else {
-                // If the current formatter name already equals the name defined in the configuration, there is no need to process
-                if (!formatterName.equals(configuration.getFormatterName())) {
-                    // Use a formatter only if a named-formatter is not defined or the named-formatter was explicitly undefined
-                    final FormatterConfiguration fmtConfig;
-                    if (logContextConfiguration.getFormatterNames().contains(formatterName)) {
-                        fmtConfig = logContextConfiguration.getFormatterConfiguration(formatterName);
-                    } else {
-                        fmtConfig = logContextConfiguration.addFormatterConfiguration(null, PatternFormatter.class.getName(), formatterName, PATTERN.getPropertyName());
-                    }
-                    fmtConfig.setPropertyValueString(PATTERN.getPropertyName(), FORMATTER.resolvePropertyValue(context, model));
-                    configuration.setFormatterName(formatterName);
                 }
             }
         } else if (attribute.getName().equals(FILTER_SPEC.getName())) {
-            final ModelNode valueNode = (resolveValue ? FILTER_SPEC.resolveModelAttribute(context, model) : model);
-            final String resolvedValue = (valueNode.isDefined() ? valueNode.asString() : null);
-            configuration.setFilter(resolvedValue);
-        } else if (attribute.getName().equals(LEVEL.getName())) {
-            final String resolvedValue = (resolveValue ? LEVEL.resolvePropertyValue(context, model) : LEVEL.resolver().resolveValue(context, model));
-            configuration.setLevel(resolvedValue);
-        } else if (attribute.getName().equals(SUBHANDLERS.getName())) {
-            final Collection<String> resolvedValue = (resolveValue ? SUBHANDLERS.resolvePropertyValue(context, model) : SUBHANDLERS.resolver().resolveValue(context, model));
-            if (resolvedValue.contains(configuration.getName())) {
-                throw createOperationFailure(LoggingLogger.ROOT_LOGGER.cannotAddHandlerToSelf(configuration.getName()));
+            if (isExpression) {
+                configuration.setFilter(attributeValue.asString(), resolvedValue.asString());
+            } else if (resolvedValue.isDefined()) {
+                configuration.setFilter(resolvedValue.asString());
+            } else {
+                configuration.setFilter(null);
             }
-            configuration.setHandlerNames(resolvedValue);
+        } else if (attribute.getName().equals(LEVEL.getName())) {
+            if (isExpression) {
+                configuration.setLevel(attributeValue.asString(), resolvedValue.asString());
+            } else if (resolvedValue.isDefined()) {
+                configuration.setLevel(resolvedValue.asString());
+            } else {
+                configuration.setLevel(LEVEL.getDefaultValue().asString());
+            }
+        } else if (attribute.getName().equals(SUBHANDLERS.getName())) {
+            if (resolvedValue.isDefined()) {
+                // TODO (jrp) this should probably be better handled
+                final Collection<String> handlers = resolvedValue.asList().stream().map(ModelNode::asString).collect(Collectors.toList());
+                if (handlers.contains(configuration.getName())) {
+                    throw createOperationFailure(LoggingLogger.ROOT_LOGGER.cannotAddHandlerToSelf(configuration.getName()));
+                }
+                configuration.setHandlerNames(handlers);
+            } else {
+                configuration.setHandlerNames(Collections.emptyList());
+            }
         } else if (attribute.getName().equals(HANDLER_NAME.getName())) {
             // no-op just ignore the name attribute
         } else if (attribute.getName().equals(PROPERTIES.getName())) {
@@ -715,32 +709,41 @@ final class HandlerOperations {
             }
             // Should be safe here to only process defined properties. The write-attribute handler handles removing
             // undefined properties
-            if (model.hasDefined(PROPERTIES.getName())) {
-                final ModelNode resolvedValue = (resolveValue ? PROPERTIES.resolveModelAttribute(context, model) : model);
+            if (resolvedValue.isDefined()) {
                 for (Property property : resolvedValue.asPropertyList()) {
                     propertyConfigurable.setPropertyValueString(property.getName(), property.getValue().asString());
                 }
-            }
+            } // TODO (jrp) handle undefined values
+        } else if (attribute.getName().equals(FILE.getName())) {
+            final ModelNode relativeTo = RELATIVE_TO.resolveModelAttribute(context, attributeValue);
+            final ModelNode path = PATH.resolveModelAttribute(context, attributeValue);
+            if (relativeTo.isDefined()) {
+                // TODO it would be better if this came via the ExtensionContext
+                ServiceName pathMgrSvc = context.getCapabilityServiceName("org.wildfly.management.path-manager", PathManager.class);
+                @SuppressWarnings("unchecked") final ServiceController<PathManager> controller = (ServiceController<PathManager>) context.getServiceRegistry(false).getService(pathMgrSvc);
+                final PathManager pathManager = controller.getValue();
+                final StringBuilder expression = new StringBuilder();
+                final String resolvedRelativeTo = pathManager.getPathEntry(relativeTo.asString()).resolvePath();
+                expression.append("${")
+                        .append(relativeTo.asString())
+                        .append(':')
+                        .append(resolvedRelativeTo)
+                        .append("}/")
+                        .append(path.asString());
+                configuration.setPropertyValueExpression(FILE.getPropertyName(), expression.toString(), pathManager.resolveRelativePathEntry(path.asString(), relativeTo.asString()));
+            } else if (path.isDefined()) {
+                configuration.setPropertyValueString(FILE.getPropertyName(), path.asString());
+            } // TODO (jrp) handle undefined values
         } else {
             if (attribute instanceof ConfigurationProperty) {
-                @SuppressWarnings("unchecked")
-                final ConfigurationProperty<String> configurationProperty = (ConfigurationProperty<String>) attribute;
-                if (resolveValue) {
-                    configurationProperty.setPropertyValue(context, model, configuration);
+                @SuppressWarnings("unchecked") final ConfigurationProperty<String> configurationProperty = (ConfigurationProperty<String>) attribute;
+                if (isExpression) {
+                    // TODO (jrp) properties may be set incorrectly since the subsystem requires 1 version and the logmanager another, e.g. System.out vs SYSTEM_OUT
+                    configuration.setPropertyValueExpression(configurationProperty.getPropertyName(), attributeValue.asString(), resolvedValue.asString());
+                } else if (attributeValue.isDefined()) {
+                    configuration.setPropertyValueString(configurationProperty.getPropertyName(), resolvedValue.asString());
                 } else {
-                    // Get the resolver
-                    final ModelNodeResolver<String> resolver = configurationProperty.resolver();
-                    // Resolve the value
-                    final String resolvedValue = (resolver == null ? (model.isDefined() ? model.asString() : null) : resolver.resolveValue(context, model));
-                    if (resolvedValue == null) {
-                        // The value must be set to null and then the property removed,
-                        // Note that primitive attributes should use a default value as null is invalid
-                        configuration.setPropertyValueString(configurationProperty.getPropertyName(), null);
-                        configuration.removeProperty(configurationProperty.getPropertyName());
-                    } else {
-                        // Set the string value
-                        configuration.setPropertyValueString(configurationProperty.getPropertyName(), resolvedValue);
-                    }
+                    configuration.removeProperty(configurationProperty.getPropertyName());
                 }
             } else {
                 LoggingLogger.ROOT_LOGGER.invalidPropertyAttribute(attribute.getName());
@@ -820,7 +823,8 @@ final class HandlerOperations {
             final String currentValue = configuration.getLevel();
             result = (resolvedValue == null ? currentValue == null : resolvedValue.equals(configuration.getLevel()));
         } else if (attribute.getName().equals(SUBHANDLERS.getName())) {
-            final Collection<String> resolvedValue = SUBHANDLERS.resolvePropertyValue(context, model);
+            // TODO (jrp) this should probably be better handled
+            final Collection<String> resolvedValue = SUBHANDLERS.resolveModelAttribute(context, model).asList().stream().map(ModelNode::asString).collect(Collectors.toList());
             final Collection<String> currentValue = configuration.getHandlerNames();
             result = (resolvedValue == null ? currentValue == null : resolvedValue.containsAll(currentValue));
         } else if (attribute.getName().equals(PROPERTIES.getName())) {
@@ -886,6 +890,7 @@ final class HandlerOperations {
     static void enableHandler(final LogContextConfiguration configuration, final String handlerName) {
         final HandlerConfiguration handlerConfiguration = configuration.getHandlerConfiguration(handlerName);
         try {
+            // TODO (jrp) handle expressions
             handlerConfiguration.setPropertyValueString("enabled", "true");
             return;
         } catch (IllegalArgumentException e) {
@@ -912,6 +917,7 @@ final class HandlerOperations {
     static void disableHandler(final LogContextConfiguration configuration, final String handlerName) {
         final HandlerConfiguration handlerConfiguration = configuration.getHandlerConfiguration(handlerName);
         try {
+            // TODO (jrp) handle expressions
             handlerConfiguration.setPropertyValueString("enabled", "false");
             return;
         } catch (IllegalArgumentException e) {

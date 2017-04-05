@@ -127,12 +127,12 @@ class CustomFormatterResourceDefinition extends TransformerResourceDefinition {
     static final OperationStepHandler WRITE = new LoggingWriteAttributeHandler(ATTRIBUTES) {
 
         @Override
-        protected boolean applyUpdate(final OperationContext context, final String attributeName, final String addressName, final ModelNode value, final LogContextConfiguration logContextConfiguration) throws OperationFailedException {
+        protected boolean applyUpdate(final OperationContext context, final String attributeName, final String addressName, final ModelNode unresolvedValue, final ModelNode resolvedValue, final LogContextConfiguration logContextConfiguration) throws OperationFailedException {
             final FormatterConfiguration configuration = logContextConfiguration.getFormatterConfiguration(addressName);
             String modelClass = CLASS.resolveModelAttribute(context, context.readResource(PathAddress.EMPTY_ADDRESS).getModel()).asString();
             if (PROPERTIES.getName().equals(attributeName) && configuration.getClassName().equals(modelClass)) {
-                if (value.isDefined()) {
-                    for (Property property : value.asPropertyList()) {
+                if (resolvedValue.isDefined()) {
+                    for (Property property : resolvedValue.asPropertyList()) {
                         configuration.setPropertyValueString(property.getName(), property.getValue().asString());
                     }
                 } else {

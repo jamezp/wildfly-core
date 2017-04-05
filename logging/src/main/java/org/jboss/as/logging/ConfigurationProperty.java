@@ -40,6 +40,7 @@ public interface ConfigurationProperty<T> {
      *
      * @return the resolver.
      */
+    @Deprecated
     ModelNodeResolver<T> resolver();
 
     /**
@@ -61,6 +62,7 @@ public interface ConfigurationProperty<T> {
      *
      * @throws OperationFailedException if the value is invalid.
      */
+    @Deprecated
     T resolvePropertyValue(OperationContext context, ModelNode model) throws OperationFailedException;
 
     /**
@@ -77,5 +79,6 @@ public interface ConfigurationProperty<T> {
      *
      * @throws OperationFailedException if the value is invalid.
      */
+    // TODO (jrp) possibly allow for some kind of Consumer, this would allow for things like setLevel to work
     void setPropertyValue(OperationContext context, ModelNode model, PropertyConfigurable configuration) throws OperationFailedException;
 }

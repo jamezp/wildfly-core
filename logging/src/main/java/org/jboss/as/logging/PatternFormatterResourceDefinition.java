@@ -128,11 +128,11 @@ public class PatternFormatterResourceDefinition extends TransformerResourceDefin
     static final OperationStepHandler WRITE = new LoggingWriteAttributeHandler(ATTRIBUTES) {
 
         @Override
-        protected boolean applyUpdate(final OperationContext context, final String attributeName, final String addressName, final ModelNode value, final LogContextConfiguration logContextConfiguration) throws OperationFailedException {
+        protected boolean applyUpdate(final OperationContext context, final String attributeName, final String addressName, final ModelNode unresolvedValue, final ModelNode resolvedValue, final LogContextConfiguration logContextConfiguration) throws OperationFailedException {
             final FormatterConfiguration configuration = logContextConfiguration.getFormatterConfiguration(addressName);
             for (PropertyAttributeDefinition attribute : ATTRIBUTES) {
                 if (attribute.getName().equals(attributeName)) {
-                    configuration.setPropertyValueString(attribute.getPropertyName(), value.asString());
+                    configuration.setPropertyValueString(attribute.getPropertyName(), resolvedValue.asString());
                     break;
                 }
             }

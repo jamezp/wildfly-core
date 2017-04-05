@@ -37,6 +37,7 @@ import org.jboss.as.controller.AttributeDefinition;
 import org.jboss.as.controller.DefaultAttributeMarshaller;
 import org.jboss.as.controller.ModelVersion;
 import org.jboss.as.controller.PathElement;
+import org.jboss.as.controller.SimpleListAttributeDefinition;
 import org.jboss.as.controller.SimpleOperationDefinitionBuilder;
 import org.jboss.as.controller.descriptions.ResourceDescriptionResolver;
 import org.jboss.as.controller.operations.validation.EnumValidator;
@@ -90,9 +91,10 @@ class AsyncHandlerResourceDefinition extends AbstractHandlerDefinition {
             .setValidator(EnumValidator.create(OverflowAction.class, false, false))
             .build();
 
-    public static final LogHandlerListAttributeDefinition SUBHANDLERS = LogHandlerListAttributeDefinition.Builder.of("subhandlers")
+    public static final SimpleListAttributeDefinition SUBHANDLERS = SimpleListAttributeDefinition.Builder.of("subhandlers", CommonAttributes.HANDLER)
             .setAllowExpression(false)
-            .setAllowNull(true)
+            .setAttributeMarshaller(HandlersAttributeMarshaller.INSTANCE)
+            .setRequired(true)
             .build();
 
     static final AttributeDefinition[] ATTRIBUTES = {ENABLED, LEVEL, FILTER_SPEC, QUEUE_LENGTH, OVERFLOW_ACTION, SUBHANDLERS};

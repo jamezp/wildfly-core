@@ -38,11 +38,11 @@ import org.jboss.logmanager.config.PropertyConfigurable;
  *
  * @author <a href="mailto:jperkins@redhat.com">James R. Perkins</a>
  */
-public class PropertyObjectTypeAttributeDefinition extends ObjectTypeAttributeDefinition implements ConfigurationProperty<String> {
+public class FileTypeAttributeDefinition extends ObjectTypeAttributeDefinition implements ConfigurationProperty<String> {
     private final ModelNodeResolver<String> resolver;
     private final String propertyName;
 
-    private PropertyObjectTypeAttributeDefinition(final Builder builder) {
+    private FileTypeAttributeDefinition(final Builder builder) {
         super(builder, builder.suffix, builder.valueTypes);
         this.propertyName = builder.propertyName;
         this.resolver = builder.resolver;
@@ -82,7 +82,7 @@ public class PropertyObjectTypeAttributeDefinition extends ObjectTypeAttributeDe
         }
     }
 
-    public static class Builder extends AbstractAttributeDefinitionBuilder<Builder, PropertyObjectTypeAttributeDefinition> {
+    public static class Builder extends AbstractAttributeDefinitionBuilder<Builder, FileTypeAttributeDefinition> {
         private ModelNodeResolver<String> resolver;
         private String propertyName;
         private String suffix;
@@ -97,11 +97,11 @@ public class PropertyObjectTypeAttributeDefinition extends ObjectTypeAttributeDe
             return new Builder(name, valueTypes);
         }
 
-        public PropertyObjectTypeAttributeDefinition build() {
+        public FileTypeAttributeDefinition build() {
             if (validator == null) {
                 validator = new ObjectTypeValidator(allowNull, valueTypes);
             }
-            return new PropertyObjectTypeAttributeDefinition(this);
+            return new FileTypeAttributeDefinition(this);
         }
 
         public Builder setSuffix(final String suffix) {
