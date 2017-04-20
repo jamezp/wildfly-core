@@ -122,6 +122,16 @@ public final class ProtocolConnectionManager {
     }
 
     /**
+     * Waits until the connection is closed.
+     */
+    public void awaitConnectionClosed() {
+        final Connection connection = this.connection;
+        if (connection != null) {
+            connection.awaitClosedUninterruptibly();
+        }
+    }
+
+    /**
      * Notification that a connection was closed.
      *
      * @param closed the closed connection

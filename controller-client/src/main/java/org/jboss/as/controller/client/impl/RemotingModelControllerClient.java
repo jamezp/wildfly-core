@@ -88,12 +88,13 @@ public class RemotingModelControllerClient extends AbstractModelControllerClient
                 strategy = null;
             }
             // Then the endpoint
+            final Endpoint endpoint = this.endpoint;
             if (endpoint != null) {
+                this.endpoint = null;
                 try {
                     endpoint.closeAsync();
                 } catch (UnsupportedOperationException ignored) {
                 }
-                endpoint = null;
             }
             // Cancel all still active operations
             channelAssociation.shutdownNow();
@@ -104,6 +105,9 @@ public class RemotingModelControllerClient extends AbstractModelControllerClient
             } finally {
                 StreamUtils.safeClose(clientConfiguration);
             }
+            // Per WFCORE-1573 remoting endpoints should be closed asynchronously, however consumers of this client
+            // likely need to wait until the endpoints are fully shutdown.
+            if (endpoint != null) endpoint.awaitClosedUninterruptibly();
         }
     }
 
@@ -118,6 +122,8 @@ public class RemotingModelControllerClient extends AbstractModelControllerClient
 
                 final ProtocolConnectionConfiguration configuration = ProtocolConfigurationFactory.create(clientConfiguration, endpoint);
 
+                // Create the channel to block on closing. Closing this MCC should be synchronous as consumers likely
+                // expect this behavior and will not have access to the internal channels, endpoints, etc.
                 strategy = ManagementClientChannelStrategy.create(configuration, channelAssociation, clientConfiguration.getCallbackHandler(),
                         clientConfiguration.getSaslOptions(), clientConfiguration.getSSLContext(),
                         new CloseHandler<Channel>() {
@@ -125,7 +131,7 @@ public class RemotingModelControllerClient extends AbstractModelControllerClient
                     public void handleClose(final Channel closed, final IOException exception) {
                         channelAssociation.handleChannelClosed(closed, exception);
                     }
-                });
+                }, true);
             } catch (RuntimeException e) {
                 throw e;
             } catch (Exception e) {

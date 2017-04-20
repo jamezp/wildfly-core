@@ -88,13 +88,53 @@ public abstract class ManagementClientChannelStrategy implements Closeable {
     /**
      * Create a new establishing management client channel-strategy
      *
+     * @param baseConfig the base connection configuration
+     * @param handler the {@code ManagementMessageHandler}
+     * @param cbHandler a callback handler
+     * @param saslOptions the sasl options
+     * @param sslContext the ssl context
+     * @param closeHandler a close handler
+     * @param blockOnClose {@code true} if {@linkplain ManagementClientChannelStrategy#close() close} should block
+     *                                  until the connection manager is shutdown, otherwise the shutdown is done
+     *                                  asynchronously
+     * @return the management client channel strategy
+     */
+    public static ManagementClientChannelStrategy create(final ProtocolConnectionConfiguration baseConfig,
+                                                         final ManagementMessageHandler handler,
+                                                         final CallbackHandler cbHandler,
+                                                         final Map<String, String> saslOptions,
+                                                         final SSLContext sslContext,
+                                                         final CloseHandler<Channel> closeHandler,
+                                                         final boolean blockOnClose) {
+        return create(createConfiguration(baseConfig, saslOptions, cbHandler, sslContext), ManagementChannelReceiver.createDelegating(handler), closeHandler, blockOnClose);
+    }
+
+    /**
+     * Create a new establishing management client channel-strategy
+     *
      * @param configuration the connection configuration
      * @param receiver the channel receiver
      * @param closeHandler the close handler
      * @return the management client channel strategy
      */
     public static ManagementClientChannelStrategy create(final ProtocolConnectionConfiguration configuration, final Channel.Receiver receiver, final CloseHandler<Channel> closeHandler) {
-        return new Establishing(configuration, receiver, closeHandler);
+        return create(configuration, receiver, closeHandler, false);
+    }
+
+    /**
+     * Create a new establishing management client channel-strategy
+     *
+     * @param configuration the connection configuration
+     * @param receiver the channel receiver
+     * @param closeHandler the close handler
+     * @param blockOnClose {@code true} if {@linkplain ManagementClientChannelStrategy#close() close} should block
+     *                                  until the connection manager is shutdown, otherwise the shutdown is done
+     *                                  asynchronously
+     * @return the management client channel strategy
+     */
+    public static ManagementClientChannelStrategy create(final ProtocolConnectionConfiguration configuration, final Channel.Receiver receiver, final CloseHandler<Channel> closeHandler,
+                                                         final boolean blockOnClose) {
+        return new Establishing(configuration, receiver, closeHandler, blockOnClose);
     }
 
     /**
@@ -144,12 +184,15 @@ public abstract class ManagementClientChannelStrategy implements Closeable {
         private final Channel.Receiver receiver;
         private final ProtocolConnectionManager connectionManager;
         private final CloseHandler<Channel> closeHandler;
+        private final boolean blockOnClose;
 
-        private Establishing(final ProtocolConnectionConfiguration configuration, final Channel.Receiver receiver, final CloseHandler<Channel> closeHandler) {
+        private Establishing(final ProtocolConnectionConfiguration configuration, final Channel.Receiver receiver, final CloseHandler<Channel> closeHandler,
+                             final boolean blockOnClose) {
             this.receiver = receiver;
             this.channelOptions = configuration.getOptionMap();
             this.connectionManager = ProtocolConnectionManager.create(configuration, this);
             this.closeHandler = closeHandler;
+            this.blockOnClose = blockOnClose;
         }
 
         @Override
@@ -184,6 +227,9 @@ public abstract class ManagementClientChannelStrategy implements Closeable {
                 super.close();
             } finally {
                 connectionManager.shutdown();
+                if (blockOnClose) {
+                    connectionManager.awaitConnectionClosed();
+                }
             }
         }
 
