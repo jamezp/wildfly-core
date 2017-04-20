@@ -51,12 +51,15 @@ import org.jboss.modules.ModuleLoader;
  */
 public class LoggingDependencyDeploymentProcessor implements DeploymentUnitProcessor {
 
-    private static final ModuleIdentifier[] LOGGING_MODULES = new ModuleIdentifier[] {
-            ModuleIdentifier.create("org.jboss.logging"),
-            ModuleIdentifier.create("org.apache.commons.logging"),
-            ModuleIdentifier.create("org.apache.log4j"),
-            ModuleIdentifier.create("org.slf4j"),
-            ModuleIdentifier.create("org.jboss.logging.jul-to-slf4j-stub"),
+    private static final String[] LOGGING_MODULES = new String[] {
+            "org.jboss.logging",
+            "org.apache.commons.logging",
+            // log4j 1.x module
+            "org.apache.log4j",
+            // log4j 2.x module
+            "org.apache.logging.log4j.api",
+            "org.slf4j",
+            "org.jboss.logging.jul-to-slf4j-stub",
     };
 
     @Override
@@ -65,11 +68,12 @@ public class LoggingDependencyDeploymentProcessor implements DeploymentUnitProce
         final ModuleSpecification moduleSpecification = deploymentUnit.getAttachment(Attachments.MODULE_SPECIFICATION);
         final ModuleLoader moduleLoader = Module.getBootModuleLoader();
         // Add the logging modules
-        for (ModuleIdentifier moduleId : LOGGING_MODULES) {
+        for (String moduleId : LOGGING_MODULES) {
             try {
                 LoggingLogger.ROOT_LOGGER.tracef("Adding module '%s' to deployment '%s'", moduleId, deploymentUnit.getName());
                 moduleLoader.loadModule(moduleId);
-                moduleSpecification.addSystemDependency(new ModuleDependency(moduleLoader, moduleId, false, false, false, false));
+                moduleSpecification.addSystemDependency(new ModuleDependency(moduleLoader, ModuleIdentifier.create(moduleId),
+                        false, false, false, false));
             } catch (ModuleLoadException ex) {
                 LoggingLogger.ROOT_LOGGER.debugf("Module not found: %s", moduleId);
             }
