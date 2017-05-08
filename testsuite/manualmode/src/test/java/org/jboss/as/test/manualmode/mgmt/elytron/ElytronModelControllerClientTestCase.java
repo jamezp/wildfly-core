@@ -25,12 +25,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
-import java.util.ArrayList;
-import java.util.List;
 import javax.inject.Inject;
 
 import org.jboss.as.controller.client.helpers.Operations;
-import org.jboss.as.test.integration.management.util.CustomCLIExecutor;
+import org.jboss.as.test.integration.management.util.CLIWrapper;
 import org.jboss.as.test.shared.TestSuiteEnvironment;
 import org.jboss.dmr.ModelNode;
 import org.junit.After;
@@ -109,16 +107,16 @@ public class ElytronModelControllerClientTestCase {
         final Path configFile = configPath.resolve(config);
         Files.copy(configPath.resolve("standalone.xml"), configFile, StandardCopyOption.REPLACE_EXISTING);
 
-        final List<String> commands = new ArrayList<>();
-        commands.add("embed-server --server-config=" + config);
-        commands.add("/subsystem=elytron/filesystem-realm=testRealm:add(path=fs-realm-users,relative-to=jboss.server.config.dir)");
-        commands.add("/subsystem=elytron/filesystem-realm=testRealm/identity=test-admin:add()");
-        commands.add("/subsystem=elytron/filesystem-realm=testRealm/identity=test-admin:set-password(clear={password=\"admin.12345\"})");
-        commands.add("/subsystem=elytron/security-domain=testSecurityDomain:add(realms=[{realm=testRealm}],default-realm=testRealm,permission-mapper=default-permission-mapper)");
-        commands.add("/subsystem=elytron/sasl-authentication-factory=test-sasl-auth:add(sasl-server-factory=configured, security-domain=testSecurityDomain, mechanism-configurations=[{mechanism-name=DIGEST-MD5, mechanism-realm-configurations=[{realm-name=testRealm}]}])");
-        commands.add("/core-service=management/management-interface=http-interface:write-attribute(name=http-upgrade.sasl-authentication-factory, value=test-sasl-auth)");
-        commands.add("stop-embedded-server");
-        CustomCLIExecutor.executeOffline(commands);
+        try (CLIWrapper cli = new CLIWrapper(false)) {
+            cli.sendLine("embed-server --server-config=" + config + " --jboss-home=" + jbossHome);
+            cli.sendLine("/subsystem=elytron/filesystem-realm=testRealm:add(path=fs-realm-users,relative-to=jboss.server.config.dir)");
+            cli.sendLine("/subsystem=elytron/filesystem-realm=testRealm/identity=test-admin:add()");
+            cli.sendLine("/subsystem=elytron/filesystem-realm=testRealm/identity=test-admin:set-password(clear={password=\"admin.12345\"})");
+            cli.sendLine("/subsystem=elytron/security-domain=testSecurityDomain:add(realms=[{realm=testRealm}],default-realm=testRealm,permission-mapper=default-permission-mapper)");
+            cli.sendLine("/subsystem=elytron/sasl-authentication-factory=test-sasl-auth:add(sasl-server-factory=configured, security-domain=testSecurityDomain, mechanism-configurations=[{mechanism-name=DIGEST-MD5, mechanism-realm-configurations=[{realm-name=testRealm}]}])");
+            cli.sendLine("/core-service=management/management-interface=http-interface:write-attribute(name=http-upgrade.sasl-authentication-factory, value=test-sasl-auth)");
+            cli.sendLine("stop-embedded-server");
+        }
         return configFile;
     }
 }
