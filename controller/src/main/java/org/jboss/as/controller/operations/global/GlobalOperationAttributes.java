@@ -71,6 +71,12 @@ class GlobalOperationAttributes {
     .setDefaultValue(new ModelNode(false))
     .build();
 
+    static final SimpleAttributeDefinition INCLUDE_DEFINED_ONLY = new SimpleAttributeDefinitionBuilder(ModelDescriptionConstants.INCLUDE_DEFINED_ONLY, ModelType.BOOLEAN)
+            .setRequired(false)
+            .setDefaultValue(new ModelNode(false))
+            .build();
+
+
     static final SimpleAttributeDefinition NAME = new SimpleAttributeDefinitionBuilder(ModelDescriptionConstants.NAME, ModelType.STRING)
     .setValidator(new StringLengthValidator(1))
     .setRequired(true)

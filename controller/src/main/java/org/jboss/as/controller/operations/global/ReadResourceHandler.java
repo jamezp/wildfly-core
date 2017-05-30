@@ -33,6 +33,7 @@ import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.REA
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.RESULT;
 import static org.jboss.as.controller.operations.global.GlobalOperationAttributes.INCLUDE_ALIASES;
 import static org.jboss.as.controller.operations.global.GlobalOperationAttributes.INCLUDE_DEFAULTS;
+import static org.jboss.as.controller.operations.global.GlobalOperationAttributes.INCLUDE_DEFINED_ONLY;
 import static org.jboss.as.controller.operations.global.GlobalOperationAttributes.INCLUDE_RUNTIME;
 import static org.jboss.as.controller.operations.global.GlobalOperationAttributes.PROXIES;
 import static org.jboss.as.controller.operations.global.GlobalOperationAttributes.RECURSIVE;
@@ -92,7 +93,7 @@ public class ReadResourceHandler extends GlobalOperationHandlers.AbstractMultiTa
             .build();
 
     public static final OperationDefinition DEFINITION = new SimpleOperationDefinitionBuilder(READ_RESOURCE_OPERATION, ControllerResolver.getResolver("global"))
-            .setParameters(RECURSIVE, RECURSIVE_DEPTH, PROXIES, INCLUDE_RUNTIME, INCLUDE_DEFAULTS, ATTRIBUTES_ONLY, INCLUDE_ALIASES)
+            .setParameters(RECURSIVE, RECURSIVE_DEPTH, PROXIES, INCLUDE_RUNTIME, INCLUDE_DEFAULTS, ATTRIBUTES_ONLY, INCLUDE_ALIASES, INCLUDE_DEFINED_ONLY)
             .setReadOnly()
             .setRuntimeOnly()
             .setReplyType(ModelType.OBJECT)
@@ -106,7 +107,7 @@ public class ReadResourceHandler extends GlobalOperationHandlers.AbstractMultiTa
             .build();
 
     public static final OperationDefinition RESOLVE_DEFINITION = new SimpleOperationDefinitionBuilder(READ_RESOURCE_OPERATION, ControllerResolver.getResolver("global"))
-            .setParameters(RESOLVE, RECURSIVE, RECURSIVE_DEPTH, PROXIES, INCLUDE_RUNTIME, INCLUDE_DEFAULTS, ATTRIBUTES_ONLY, INCLUDE_ALIASES)
+            .setParameters(RESOLVE, RECURSIVE, RECURSIVE_DEPTH, PROXIES, INCLUDE_RUNTIME, INCLUDE_DEFAULTS, ATTRIBUTES_ONLY, INCLUDE_ALIASES, INCLUDE_DEFINED_ONLY)
             .setReadOnly()
             .setRuntimeOnly()
             .setReplyType(ModelType.OBJECT)
@@ -221,6 +222,7 @@ public class ReadResourceHandler extends GlobalOperationHandlers.AbstractMultiTa
         final boolean aliases = operation.get(ModelDescriptionConstants.INCLUDE_ALIASES).asBoolean(false);
         final boolean defaults = operation.get(ModelDescriptionConstants.INCLUDE_DEFAULTS).asBoolean(true);
         final boolean attributesOnly = operation.get(ModelDescriptionConstants.ATTRIBUTES_ONLY).asBoolean(false);
+        final boolean includeDefinedOnly = operation.get(ModelDescriptionConstants.INCLUDE_DEFINED_ONLY).asBoolean(false);
         final boolean resolve = RESOLVE.resolveModelAttribute(context, operation).asBoolean();
 
         // Child types with no actual children
@@ -299,6 +301,7 @@ public class ReadResourceHandler extends GlobalOperationHandlers.AbstractMultiTa
                             rrOp.get(ModelDescriptionConstants.INCLUDE_RUNTIME).set(queryRuntime);
                             rrOp.get(ModelDescriptionConstants.INCLUDE_ALIASES).set(aliases);
                             rrOp.get(ModelDescriptionConstants.INCLUDE_DEFAULTS).set(defaults);
+                            rrOp.get(ModelDescriptionConstants.INCLUDE_DEFINED_ONLY).set(includeDefinedOnly);
                             ModelNode rrRsp = new ModelNode();
                             childResources.put(childPE, rrRsp);
 
@@ -600,14 +603,21 @@ public class ReadResourceHandler extends GlobalOperationHandlers.AbstractMultiTa
                     // we ignore metric failures
                     // TODO how to prevent the metric failure screwing up the overall context?
                 }
+                final boolean includeDefinedOnly = operation.get(ModelDescriptionConstants.INCLUDE_DEFINED_ONLY).asBoolean(false);
 
                 final ModelNode result = context.getResult();
                 result.setEmptyObject();
                 for (Map.Entry<AttributeDefinition.NameAndGroup, ModelNode> entry : sortedAttributes.entrySet()) {
+                    if (includeDefinedOnly && !entry.getValue().isDefined()) {
+                        continue;
+                    }
                     result.get(entry.getKey().getName()).set(entry.getValue());
                 }
 
                 for (Map.Entry<String, ModelNode> entry : sortedChildren.entrySet()) {
+                    if (includeDefinedOnly && !entry.getValue().isDefined()) {
+                        continue;
+                    }
                     if (!entry.getValue().isDefined()) {
                         result.get(entry.getKey()).set(entry.getValue());
                     } else {
