@@ -658,17 +658,22 @@ final class HandlerOperations {
                     logContextConfiguration.removeFormatterConfiguration(handlerName);
                 }
             } else {
-                // If the named-formatter was undefined we need to create a formatter based on the formatter attribute
-                final FormatterConfiguration fmtConfig;
-                if (logContextConfiguration.getFormatterNames().contains(handlerName)) {
-                    fmtConfig = logContextConfiguration.getFormatterConfiguration(handlerName);
-                } else {
-                    fmtConfig = logContextConfiguration.addFormatterConfiguration(null, PatternFormatter.class.getName(), handlerName, PATTERN.getPropertyName());
-                }
-                // Get the current model and set the value of the formatter based on the formatter attribute
+                // If the named-formatter was undefined we need to create a formatter based on the formatter attribute,
+                // unless the resource does not contain a formatter attribute. If the formatter attribute doesn't exist
+                // we can assume no formatter needs to be set.
                 final Resource resource = context.readResource(PathAddress.EMPTY_ADDRESS);
-                fmtConfig.setPropertyValueString(PATTERN.getPropertyName(), FORMATTER.resolvePropertyValue(context, resource.getModel()));
-                configuration.setFormatterName(handlerName);
+                final ModelNode resourceModel = resource.getModel();
+                if (resourceModel.has(FORMATTER.getName())) {
+                    final FormatterConfiguration fmtConfig;
+                    if (logContextConfiguration.getFormatterNames().contains(handlerName)) {
+                        fmtConfig = logContextConfiguration.getFormatterConfiguration(handlerName);
+                    } else {
+                        fmtConfig = logContextConfiguration.addFormatterConfiguration(null, PatternFormatter.class.getName(), handlerName, PATTERN.getPropertyName());
+                    }
+                    // Get the current model and set the value of the formatter based on the formatter attribute
+                    fmtConfig.setPropertyValueString(PATTERN.getPropertyName(), FORMATTER.resolvePropertyValue(context, resourceModel));
+                    configuration.setFormatterName(handlerName);
+                }
             }
         } else if (attribute.getName().equals(FILTER_SPEC.getName())) {
             final ModelNode valueNode = (resolveValue ? FILTER_SPEC.resolveModelAttribute(context, model) : model);

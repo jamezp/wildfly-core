@@ -50,6 +50,7 @@ import org.jboss.as.subsystem.test.SubsystemOperations;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.ModelType;
 import org.jboss.dmr.Property;
+import org.jboss.logmanager.Configurator;
 import org.jboss.logmanager.LogContext;
 import org.jboss.logmanager.config.FormatterConfiguration;
 import org.jboss.logmanager.config.HandlerConfiguration;
@@ -99,9 +100,10 @@ public abstract class AbstractLoggingSubsystemTest extends AbstractSubsystemBase
     }
 
     protected void clearLogContext(final LogContext logContext) {
-        final ConfigurationPersistence configuration = ConfigurationPersistence.getConfigurationPersistence(logContext);
-        if (configuration != null) {
-            final LogContextConfiguration logContextConfiguration = configuration.getLogContextConfiguration();
+        final Configurator configurator = logContext.getAttachment(CommonAttributes.ROOT_LOGGER_NAME, Configurator.ATTACHMENT_KEY);
+        // Not all tests use the subsystem ConfigurationPersistence, we should be sensitive to that and not fail
+        if (configurator instanceof LogContextConfiguration) {
+            final LogContextConfiguration logContextConfiguration = (LogContextConfiguration) configurator;
             // Remove all loggers
             for (String loggerName : logContextConfiguration.getLoggerNames()) {
                 logContextConfiguration.removeLoggerConfiguration(loggerName);
@@ -122,7 +124,7 @@ public abstract class AbstractLoggingSubsystemTest extends AbstractSubsystemBase
             for (String errorManager : logContextConfiguration.getErrorManagerNames()) {
                 logContextConfiguration.removeErrorManagerConfiguration(errorManager);
             }
-            configuration.commit();
+            logContextConfiguration.commit();
         }
     }
 
@@ -437,8 +439,14 @@ public abstract class AbstractLoggingSubsystemTest extends AbstractSubsystemBase
                         configPropertyName = convertModelPropertyName(modelPropertyName);
                     }
 
-                    Assert.assertTrue("Configuration is missing property name: " + modelPropertyName, configPropertyNames.contains(configPropertyName));
-                    configValue = handlerConfig.getPropertyValueString(configPropertyName);
+                    if (modelValue.isDefined()) {
+                        Assert.assertTrue("Configuration is missing property name: " + modelPropertyName, configPropertyNames.contains(configPropertyName));
+                        configValue = handlerConfig.getPropertyValueString(configPropertyName);
+                    } else {
+                        Assert.assertFalse(String.format("Configuration contains the property %s, but the model value %s is undefined.",
+                                configPropertyName, modelPropertyName), configPropertyNames.contains(configPropertyName));
+                        configValue = null;
+                    }
                 }
                 if (configValue == null) {
                     Assert.assertFalse(String.format("Handler property values do not match.%nConfig Value: %s%nModel Value:  %s", configValue, modelValue), modelValue.isDefined());

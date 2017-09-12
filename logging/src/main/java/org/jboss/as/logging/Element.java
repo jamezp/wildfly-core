@@ -41,6 +41,7 @@ enum Element {
     APP_NAME(SyslogHandlerResourceDefinition.APP_NAME),
     APPEND(CommonAttributes.APPEND),
     ASYNC_HANDLER(AsyncHandlerResourceDefinition.ASYNC_HANDLER),
+    BLOCK_ON_RECONNECT(SyslogHandlerResourceDefinition.BLOCK_ON_RECONNECT),
     CHANGE_LEVEL(CommonAttributes.CHANGE_LEVEL),
     CONSOLE_HANDLER(ConsoleHandlerResourceDefinition.CONSOLE_HANDLER),
     CUSTOM_FORMATTER(CustomFormatterResourceDefinition.CUSTOM_FORMATTER),
@@ -63,6 +64,8 @@ enum Element {
     LOGGING_PROFILES(CommonAttributes.LOGGING_PROFILES),
     MATCH(CommonAttributes.MATCH),
     MAX_BACKUP_INDEX(SizeRotatingHandlerResourceDefinition.MAX_BACKUP_INDEX),
+    MAX_LENGTH(SyslogHandlerResourceDefinition.MAX_LENGTH),
+    MESSAGE_DELIMITER(SyslogHandlerResourceDefinition.MESSAGE_DELIMITER),
     NAMED_FORMATTER(AbstractHandlerDefinition.NAMED_FORMATTER),
     NOT(CommonAttributes.NOT),
     OVERFLOW_ACTION(AsyncHandlerResourceDefinition.OVERFLOW_ACTION),
@@ -72,6 +75,7 @@ enum Element {
     PORT(SyslogHandlerResourceDefinition.PORT),
     PROPERTIES(CommonAttributes.PROPERTIES),
     PROPERTY("property"),
+    PROTOCOL(SyslogHandlerResourceDefinition.PROTOCOL),
     QUEUE_LENGTH(AsyncHandlerResourceDefinition.QUEUE_LENGTH),
     REPLACE(CommonAttributes.REPLACE),
     ROOT_LOGGER(RootLoggerResourceDefinition.ROOT_LOGGER_PATH_NAME),
@@ -83,7 +87,10 @@ enum Element {
     SYSLOG_FORMATTER(SyslogHandlerResourceDefinition.SYSLOG_FORMATTER),
     SYSLOG_HANDLER(SyslogHandlerResourceDefinition.SYSLOG_HANDLER),
     TARGET(ConsoleHandlerResourceDefinition.TARGET),
+    TRUNCATE(SyslogHandlerResourceDefinition.TRUNCATE),
+    USE_COUNTING_FRAMING(SyslogHandlerResourceDefinition.USE_COUNTING_FRAMING),
     USE_DEPLOYMENT_LOGGING_CONFIG(LoggingResourceDefinition.USE_DEPLOYMENT_LOGGING_CONFIG),
+    USE_MESSAGE_DELIMITER(SyslogHandlerResourceDefinition.USE_MESSAGE_DELIMITER),
     ;
 
     private final String name;

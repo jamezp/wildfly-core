@@ -233,6 +233,7 @@ public class LoggingSubsystemTestCase extends AbstractLoggingSubsystemTest {
                                 new RejectExpressionsConfig(ConsoleHandlerResourceDefinition.TARGET)));
     }
 
+    // TODO (jrp) we need to test the EAP 7 transformers reject the new syslog attributes
     @Test
     public void testTransformersEAP700() throws Exception {
         testEap7Transformer(ModelTestControllerVersion.EAP_7_0_0, ModelVersion.create(3, 0, 0), readResource("/logging_3_0.xml") );

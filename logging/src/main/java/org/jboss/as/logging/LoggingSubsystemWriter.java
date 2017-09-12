@@ -62,12 +62,18 @@ import static org.jboss.as.logging.SizeRotatingHandlerResourceDefinition.ROTATE_
 import static org.jboss.as.logging.SizeRotatingHandlerResourceDefinition.ROTATE_SIZE;
 import static org.jboss.as.logging.SizeRotatingHandlerResourceDefinition.SIZE_ROTATING_FILE_HANDLER;
 import static org.jboss.as.logging.SyslogHandlerResourceDefinition.APP_NAME;
+import static org.jboss.as.logging.SyslogHandlerResourceDefinition.BLOCK_ON_RECONNECT;
 import static org.jboss.as.logging.SyslogHandlerResourceDefinition.FACILITY;
 import static org.jboss.as.logging.SyslogHandlerResourceDefinition.HOSTNAME;
+import static org.jboss.as.logging.SyslogHandlerResourceDefinition.MAX_LENGTH;
+import static org.jboss.as.logging.SyslogHandlerResourceDefinition.MESSAGE_DELIMITER;
 import static org.jboss.as.logging.SyslogHandlerResourceDefinition.PORT;
+import static org.jboss.as.logging.SyslogHandlerResourceDefinition.PROTOCOL;
 import static org.jboss.as.logging.SyslogHandlerResourceDefinition.SERVER_ADDRESS;
 import static org.jboss.as.logging.SyslogHandlerResourceDefinition.SYSLOG_FORMATTER;
 import static org.jboss.as.logging.SyslogHandlerResourceDefinition.SYSLOG_HANDLER;
+import static org.jboss.as.logging.SyslogHandlerResourceDefinition.USE_COUNTING_FRAMING;
+import static org.jboss.as.logging.SyslogHandlerResourceDefinition.USE_MESSAGE_DELIMITER;
 
 import java.util.List;
 import javax.xml.stream.XMLStreamConstants;
@@ -315,14 +321,29 @@ public class LoggingSubsystemWriter implements XMLStreamConstants, XMLElementWri
     private void writeSyslogHandler(final XMLExtendedStreamWriter writer, final ModelNode model, final String name) throws XMLStreamException {
         writer.writeStartElement(Element.SYSLOG_HANDLER.getLocalName());
         writer.writeAttribute(HANDLER_NAME.getXmlName(), name);
+        AUTOFLUSH.marshallAsAttribute(model, writer);
         ENABLED.marshallAsAttribute(model, false, writer);
         LEVEL.marshallAsElement(model, writer);
         SERVER_ADDRESS.marshallAsElement(model, writer);
         HOSTNAME.marshallAsElement(model, writer);
         PORT.marshallAsElement(model, writer);
         APP_NAME.marshallAsElement(model, writer);
-        SYSLOG_FORMATTER.marshallAsElement(model, writer);
+        // The syslog-formatter and named-formatter need to be written specially
+        if (model.hasDefined(SYSLOG_FORMATTER.getName()) || model.hasDefined(NAMED_FORMATTER.getName())) {
+            writer.writeStartElement(AbstractHandlerDefinition.FORMATTER.getXmlName());
+            SYSLOG_FORMATTER.marshallAsElement(model, writer);
+            // TODO (jrp) we may just want to consider the formatter/named-formatter's should be marshalled correctly in here not the AttributeDefinitions
+            ElementAttributeMarshaller.NAME_ATTRIBUTE_MARSHALLER.marshallAsElement(NAMED_FORMATTER, model, false, writer);
+            writer.writeEndElement();
+        }
         FACILITY.marshallAsElement(model, writer);
+        FILTER_SPEC.marshallAsElement(model, writer);
+        BLOCK_ON_RECONNECT.marshallAsElement(model, writer);
+        MAX_LENGTH.marshallAsElement(model, writer);
+        MESSAGE_DELIMITER.marshallAsElement(model, writer);
+        PROTOCOL.marshallAsElement(model, writer);
+        USE_COUNTING_FRAMING.marshallAsElement(model, writer);
+        USE_MESSAGE_DELIMITER.marshallAsElement(model, writer);
 
         writer.writeEndElement();
     }

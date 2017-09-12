@@ -323,6 +323,7 @@
         <xs:attribute name="enabled" type="xs:boolean" use="optional" default="true"/>
     </xs:complexType>
 
+    <!-- TODO (jrp) we may want to consider adding encoding, but currently it doesn't really do anything in the SyslogHandler -->
     <xs:complexType name="syslogHandlerType">
         <xs:annotation>
             <xs:documentation>
@@ -363,9 +364,73 @@
             </xs:element>
             <xs:element name="formatter" type="syslogFormatterType" minOccurs="0" maxOccurs="1"/>
             <xs:element name="facility" type="facilityType" minOccurs="0" maxOccurs="1"/>
+            <xs:element name="filter-spec" type="valueType" minOccurs="0"/>
+            <!-- TODO (jrp) should just be an attribute? -->
+            <xs:element name="block-on-reconnect" type="booleanValueType" minOccurs="0">
+                <xs:annotation>
+                    <xs:documentation>
+                        Indicates whether the handler should block further requests when attempting to reconnect to the
+                        syslog server. Changing the value to true should only be done when wrapped in an async-handler.
+                    </xs:documentation>
+                </xs:annotation>
+            </xs:element>
+            <xs:element name="max-length" type="positiveIntType" minOccurs="0">
+                <xs:annotation>
+                    <xs:documentation>
+                        Sets the maximum length, in bytes, of the message allowed to be sent. Note that the message
+                        length includes the header and the message itself.
+                    </xs:documentation>
+                </xs:annotation>
+            </xs:element>
+            <xs:element name="message-delimiter" type="valueType" minOccurs="0">
+                <xs:annotation>
+                    <xs:documentation>
+                        A delimiter that will be appended to the message if the use-message-delimiter is set to true.
+                        By default the value will be &quot;\n&quot; for TCP and SSL TCP connections and null for UDP
+                        connections. This value will only be used if use-message-delimiter is set to true.
+                    </xs:documentation>
+                </xs:annotation>
+            </xs:element>
+            <xs:element name="protocol" type="protocolType" minOccurs="0">
+                <xs:annotation>
+                    <xs:documentation>
+                        Sets the protocol used to connect to the syslog server.
+                    </xs:documentation>
+                </xs:annotation>
+            </xs:element>
+            <!-- TODO (jrp) should just be an attribute? -->
+            <xs:element name="truncate" type="booleanValueType" minOccurs="0">
+                <xs:annotation>
+                    <xs:documentation>
+                        Set to true if the message should be truncated if the total length the max-length. Set to false
+                        if the message should be split and sent as multiple messages. The header will remain the same
+                        for each message sent. The wrapping is not a word based wrap and could split words between log
+                        messages.
+                    </xs:documentation>
+                </xs:annotation>
+            </xs:element>
+            <!-- TODO (jrp) should just be an attribute? -->
+            <xs:element name="use-counting-framing" type="booleanValueType" minOccurs="0">
+                <xs:annotation>
+                    <xs:documentation>
+                        Set to true if the message being sent should be prefixed with the size of the message. See
+                        http://tools.ietf.org/html/rfc6587 for more details on framing types.
+                    </xs:documentation>
+                </xs:annotation>
+            </xs:element>
+            <!-- TODO (jrp) should this just be an attribute on the above or even better not used and just use the value if it's defined? -->
+            <xs:element name="use-message-delimiter" type="booleanValueType" minOccurs="0">
+                <xs:annotation>
+                    <xs:documentation>
+                        Indicates whether or not the message-delimiter should be appended to the message set. For TCP
+                        and SSL TCP connections this defaults to true. For UPD connections this defaults to false.
+                    </xs:documentation>
+                </xs:annotation>
+            </xs:element>
         </xs:all>
         <xs:attribute name="name" type="xs:string" use="required"/>
         <xs:attribute name="enabled" type="xs:boolean" use="optional" default="true"/>
+        <xs:attribute name="autoflush" type="xs:boolean" default="true"/>
     </xs:complexType>
 
     <xs:complexType name="queueLengthType">
@@ -416,6 +481,23 @@
                 <xs:restriction base="xs:string">
                     <!-- XSD doesn't allow ^ or $ so ^[0-9]+[bkmgtp]?$ is invalid -->
                     <xs:pattern value="[0-9]+[bkmgtp]"/>
+                </xs:restriction>
+            </xs:simpleType>
+        </xs:attribute>
+    </xs:complexType>
+
+    <xs:complexType name="protocolType">
+        <xs:annotation>
+            <xs:documentation>
+                The type of the connection to use
+            </xs:documentation>
+        </xs:annotation>
+        <xs:attribute name="value" use="required">
+            <xs:simpleType>
+                <xs:restriction base="xs:token">
+                    <xs:enumeration value="UDP"/>
+                    <xs:enumeration value="TCP"/>
+                    <xs:enumeration value="SSL_TCP"/>
                 </xs:restriction>
             </xs:simpleType>
         </xs:attribute>
@@ -571,9 +653,10 @@
                 Defines a formatter.
             </xs:documentation>
         </xs:annotation>
-        <xs:choice minOccurs="1" maxOccurs="1">
-            <xs:element name="syslog-format" type="syslogFormatType" maxOccurs="1"/>
-        </xs:choice>
+        <xs:all>
+            <xs:element name="syslog-format" type="syslogFormatType" minOccurs="0"/>
+            <xs:element name="named-formatter" type="namedFormatterType" minOccurs="0"/>
+        </xs:all>
     </xs:complexType>
 
     <xs:complexType name="syslogFormatType">

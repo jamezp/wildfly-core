@@ -315,7 +315,8 @@ public class LoggingExtension implements Extension {
     private void registerTransformers(final SubsystemRegistration registration, final TransformerResourceDefinition... defs) {
         ChainedTransformationDescriptionBuilder chainedBuilder = TransformationDescriptionBuilder.Factory.createChainedSubystemInstance(registration.getSubsystemVersion());
 
-        registerTransformers(chainedBuilder, registration.getSubsystemVersion(), KnownModelVersion.VERSION_2_0_0, defs);
+        // TODO (jrp) do we need a current to 4?
+        registerTransformers(chainedBuilder, registration.getSubsystemVersion(), KnownModelVersion.VERSION_4_0_0, defs);
         // Version 1.5.0 has the periodic-size-rotating-file-handler and the suffix attribute on the size-rotating-file-handler.
         // Neither of these are in 2.0.0 (WildFly 8.x). Mapping from 3.0.0 to 1.5.0 is required
         registerTransformers(chainedBuilder, KnownModelVersion.VERSION_3_0_0, KnownModelVersion.VERSION_1_5_0, defs);
@@ -329,6 +330,7 @@ public class LoggingExtension implements Extension {
                 KnownModelVersion.VERSION_1_4_0.getModelVersion(),
                 KnownModelVersion.VERSION_1_5_0.getModelVersion(),
                 KnownModelVersion.VERSION_3_0_0.getModelVersion(),
+                KnownModelVersion.VERSION_4_0_0.getModelVersion(),
         });
     }
 
