@@ -85,7 +85,7 @@ public class LoggingExtension implements Extension {
 
     static final GenericSubsystemDescribeHandler DESCRIBE_HANDLER = GenericSubsystemDescribeHandler.create(LoggingChildResourceComparator.INSTANCE);
 
-    private static final int MANAGEMENT_API_MAJOR_VERSION = 4;
+    private static final int MANAGEMENT_API_MAJOR_VERSION = 5;
     private static final int MANAGEMENT_API_MINOR_VERSION = 0;
     private static final int MANAGEMENT_API_MICRO_VERSION = 0;
 
@@ -238,6 +238,7 @@ public class LoggingExtension implements Extension {
         setParser(context, Namespace.LOGGING_1_5, LoggingSubsystemParser_1_5::new);
         setParser(context, Namespace.LOGGING_2_0, LoggingSubsystemParser_2_0::new);
         setParser(context, Namespace.LOGGING_3_0, LoggingSubsystemParser_3_0::new);
+        setParser(context, Namespace.LOGGING_4_0, LoggingSubsystemParser_4_0::new);
     }
 
     private void registerLoggingProfileSubModels(final ManagementResourceRegistration registration, final PathManager pathManager) {
