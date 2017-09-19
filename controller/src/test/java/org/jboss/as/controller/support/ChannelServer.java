@@ -120,7 +120,14 @@ public class ChannelServer implements Closeable {
         IoUtils.safeClose(streamServer);
         IoUtils.safeClose(registration);
         // TODO WFCORE-3302 -- should not be necessary to dispose of endpoint
-        IoUtils.safeClose(endpoint);
+        if (endpoint != null) {
+            endpoint.closeAsync();
+            try {
+                endpoint.awaitClosed();
+            } catch (InterruptedException e) {
+                // ignored
+            }
+        }
     }
 
     public static final class Configuration {
