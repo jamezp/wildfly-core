@@ -395,12 +395,12 @@ public class ConfigurationPersistence implements Configurator, LogContextConfigu
         if (loggingConfig == null) {
             LoggingLogger.ROOT_LOGGER.warn(LoggingLogger.ROOT_LOGGER.pathManagerServiceNotStarted());
         } else {
-            final File configFile = new File(loggingConfig);
+            //final File configFile = new File(loggingConfig);
             synchronized (LOCK) {
                 try {
                     // Commit the log context configuration
                     commit();
-                    FileOutputStream out = null;
+                    /*FileOutputStream out = null;
                     try {
                         out = new FileOutputStream(configFile);
                         final FileLock lock = out.getChannel().lock();
@@ -419,7 +419,7 @@ public class ConfigurationPersistence implements Configurator, LogContextConfigu
                         throw LoggingLogger.ROOT_LOGGER.failedToWriteConfigurationFile(e, configFile);
                     } finally {
                         safeClose(out);
-                    }
+                    }*/
                 } finally {
                     forget();
                 }

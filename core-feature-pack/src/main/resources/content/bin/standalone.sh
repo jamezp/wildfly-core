@@ -310,7 +310,8 @@ while true; do
       # Execute the JVM in the foreground
       eval \"$JAVA\" -D\"[Standalone]\" $JAVA_OPTS \
          \"-Dorg.jboss.boot.log.file="$JBOSS_LOG_DIR"/server.log\" \
-         \"-Dlogging.configuration=file:"$JBOSS_CONFIG_DIR"/logging.properties\" \
+         \"-Dorg.jboss.logmanager.bootstrap.enabled=true\" \
+         \"-Dorg.jboss.logmanager.bootstrap.level=DEBUG\" \
          -jar \""$JBOSS_HOME"/jboss-modules.jar\" \
          $MODULE_OPTS \
          -mp \""${JBOSS_MODULEPATH}"\" \
@@ -323,7 +324,8 @@ while true; do
       # Execute the JVM in the background
       eval \"$JAVA\" -D\"[Standalone]\" $JAVA_OPTS \
          \"-Dorg.jboss.boot.log.file="$JBOSS_LOG_DIR"/server.log\" \
-         \"-Dlogging.configuration=file:"$JBOSS_CONFIG_DIR"/logging.properties\" \
+         \"-Dorg.jboss.logmanager.bootstrap.level=DEBUG\" \
+         \"-Dorg.jboss.logmanager.bootstrap.enabled=true\" \
          -jar \""$JBOSS_HOME"/jboss-modules.jar\" \
          $MODULE_OPTS \
          -mp \""${JBOSS_MODULEPATH}"\" \
