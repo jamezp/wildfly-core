@@ -99,28 +99,27 @@ public abstract class AbstractLoggingSubsystemTest extends AbstractSubsystemBase
     }
 
     protected void clearLogContext(final LogContext logContext) {
-        final ConfigurationPersistence configuration = ConfigurationPersistence.getConfigurationPersistence(logContext);
+        final LogContextConfiguration configuration = ConfigurationPersistence.getConfigurationPersistence(logContext);
         if (configuration != null) {
-            final LogContextConfiguration logContextConfiguration = configuration.getLogContextConfiguration();
             // Remove all loggers
-            for (String loggerName : logContextConfiguration.getLoggerNames()) {
-                logContextConfiguration.removeLoggerConfiguration(loggerName);
+            for (String loggerName : configuration.getLoggerNames()) {
+                configuration.removeLoggerConfiguration(loggerName);
             }
             // Remove all the handlers
-            for (String handlerName : logContextConfiguration.getHandlerNames()) {
-                logContextConfiguration.removeHandlerConfiguration(handlerName);
+            for (String handlerName : configuration.getHandlerNames()) {
+                configuration.removeHandlerConfiguration(handlerName);
             }
             // Remove all the filters
-            for (String filterName : logContextConfiguration.getFilterNames()) {
-                logContextConfiguration.removeFilterConfiguration(filterName);
+            for (String filterName : configuration.getFilterNames()) {
+                configuration.removeFilterConfiguration(filterName);
             }
             // Remove all the formatters
-            for (String formatterName : logContextConfiguration.getFormatterNames()) {
-                logContextConfiguration.removeFormatterConfiguration(formatterName);
+            for (String formatterName : configuration.getFormatterNames()) {
+                configuration.removeFormatterConfiguration(formatterName);
             }
             // Remove all the error managers
-            for (String errorManager : logContextConfiguration.getErrorManagerNames()) {
-                logContextConfiguration.removeErrorManagerConfiguration(errorManager);
+            for (String errorManager : configuration.getErrorManagerNames()) {
+                configuration.removeErrorManagerConfiguration(errorManager);
             }
             configuration.commit();
         }
@@ -256,8 +255,7 @@ public abstract class AbstractLoggingSubsystemTest extends AbstractSubsystemBase
     }
 
     protected void compare(final ModelNode currentModel, final ConfigurationPersistence config) throws OperationFailedException {
-        final LogContextConfiguration logContextConfig = config.getLogContextConfiguration();
-        final List<String> handlerNames = logContextConfig.getHandlerNames();
+        final List<String> handlerNames = config.getHandlerNames();
         final List<String> modelHandlerNames = getHandlerNames(currentModel);
         final List<String> missingConfigHandlers = new ArrayList<String>(handlerNames);
         missingConfigHandlers.removeAll(modelHandlerNames);
@@ -268,10 +266,10 @@ public abstract class AbstractLoggingSubsystemTest extends AbstractSubsystemBase
         Assert.assertTrue("Model contains handlers not in the configuration: " + missingModelHandlers, missingModelHandlers.isEmpty());
 
         // Compare property values for the handlers
-        compareHandlers(logContextConfig, handlerNames, currentModel);
+        compareHandlers(config, handlerNames, currentModel);
 
         // Compare logger values
-        compareLoggers(logContextConfig, currentModel);
+        compareLoggers(config, currentModel);
 
     }
 

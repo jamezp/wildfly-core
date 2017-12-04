@@ -22,19 +22,12 @@
 
 package org.jboss.as.logging.logmanager;
 
-import java.io.Closeable;
-import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.channels.FileLock;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 
-import org.jboss.as.controller.OperationContext;
 import org.jboss.as.logging.CommonAttributes;
 import org.jboss.as.logging.logging.LoggingLogger;
-import org.jboss.as.logging.resolvers.FileResolver;
 import org.jboss.logmanager.Configurator;
 import org.jboss.logmanager.LogContext;
 import org.jboss.logmanager.Logger;
@@ -55,12 +48,11 @@ import org.jboss.logmanager.config.PojoConfiguration;
  *
  * @author <a href="mailto:jperkins@redhat.com">James R. Perkins</a>
  */
+// TODO (jrp) unimplement the Configurator and rename this
 public class ConfigurationPersistence implements Configurator, LogContextConfiguration {
 
     private static final Object LOCK = new Object();
-    private static final String PROPERTIES_FILE = "logging.properties";
-    private static final byte[] NOTE_MESSAGE = String.format("# Note this file has been generated and will be overwritten if a%n" +
-            "# logging subsystem has been defined in the XML configuration.%n%n").getBytes(StandardCharsets.UTF_8);
+    @Deprecated
     private final PropertyConfigurator config;
     private final LogContextConfiguration delegate;
 
@@ -133,14 +125,6 @@ public class ConfigurationPersistence implements Configurator, LogContextConfigu
     public static ConfigurationPersistence getConfigurationPersistence(final LogContext logContext) {
         if (logContext == null) return null;
         return (ConfigurationPersistence) logContext.getAttachment(CommonAttributes.ROOT_LOGGER_NAME, Configurator.ATTACHMENT_KEY);
-    }
-
-    private static void safeClose(final Closeable closeable) {
-        if (closeable != null) try {
-            closeable.close();
-        } catch (Throwable t) {
-            LoggingLogger.ROOT_LOGGER.failedToCloseResource(t, closeable);
-        }
     }
 
     @Override
@@ -343,87 +327,6 @@ public class ConfigurationPersistence implements Configurator, LogContextConfigu
     public void forget() {
         synchronized (LOCK) {
             delegate.forget();
-        }
-    }
-
-    /**
-     * Rolls back the runtime changes.
-     */
-    public void rollback() {
-        forget();
-    }
-
-    /**
-     * Get the log context configuration.
-     * <p/>
-     * <em>WARNING</em>: this instance is not thread safe in any way.  The returned object should never be used from
-     * more than one thread at a time; furthermore the {@link #writeConfiguration(OperationContext)} method also
-     * accesses this object directly.
-     *
-     * @return the log context configuration instance
-     */
-    public LogContextConfiguration getLogContextConfiguration() {
-        return this;
-    }
-
-    /**
-     * Write the logging configuration to the {@code logging.properties} file.
-     *
-     * @param context the context used to determine the file location.
-     */
-    public void writeConfiguration(final OperationContext context) {
-        final String loggingConfig;
-        switch (context.getProcessType()) {
-            case DOMAIN_SERVER: {
-                loggingConfig = FileResolver.resolvePath(context, "jboss.server.data.dir", PROPERTIES_FILE);
-                break;
-            }
-            case STANDALONE_SERVER: {
-                loggingConfig = FileResolver.resolvePath(context, "jboss.server.config.dir", PROPERTIES_FILE);
-                break;
-            }
-            default: {
-                /*
-                For every case other than domain or standalone servers, (embedded, appclient etc.) this leave loggingConfig
-                unset and returns. Allowing the config to be set here, will result in the respective {standalone|domain}/configuration/
-                logging.properties being overwritten with a basic empty logging template, which may cause unexpected and missing logging
-                output on the next startup. (This is caused in the embedded case by nothing being committed on the LogContext being used.)
-                */
-                return;
-            }
-        }
-        if (loggingConfig == null) {
-            LoggingLogger.ROOT_LOGGER.warn(LoggingLogger.ROOT_LOGGER.pathManagerServiceNotStarted());
-        } else {
-            //final File configFile = new File(loggingConfig);
-            synchronized (LOCK) {
-                try {
-                    // Commit the log context configuration
-                    commit();
-                    /*FileOutputStream out = null;
-                    try {
-                        out = new FileOutputStream(configFile);
-                        final FileLock lock = out.getChannel().lock();
-                        try {
-                            out.write(NOTE_MESSAGE);
-                            config.writeConfiguration(out);
-                        } finally {
-                            // The write should close the stream which would release the lock this check ensures the
-                            // lock will be released
-                            if (lock.isValid()) {
-                                lock.release();
-                            }
-                        }
-                        LoggingLogger.ROOT_LOGGER.tracef("Logging configuration file '%s' successfully written.", configFile.getAbsolutePath());
-                    } catch (IOException e) {
-                        throw LoggingLogger.ROOT_LOGGER.failedToWriteConfigurationFile(e, configFile);
-                    } finally {
-                        safeClose(out);
-                    }*/
-                } finally {
-                    forget();
-                }
-            }
         }
     }
 }

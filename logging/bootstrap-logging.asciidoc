@@ -1,0 +1,64 @@
+= Bootstrap Logging in Wildfly
+
+== Overview
+
+The intention for bootstrapping logging is to enable log handlers, or other logging resources, to use capabilties from
+other subsystems that will not be configured at initial stages of logging. Logging needs to be configured or at least
+accept messages immediately. This is currently done using a `logging.properties` file. Queueing log messages will allow
+the `logging.properties` file to be removed.
+
+Ideally we have a way to intelligently determine if we should enable bootstrapping. The simple way is to update
+the scripts to pass the system properties required. However if the logging subsystem is not present then the queue
+may be used forever. However, it's possible the user is using a `logging.properties` file. If this is the case then
+`LogContext.configurationComplete()` may actually be invoked.
+
+It's possible we could use a script to look for the `logging.properties` file and if found, disable bootstrapping.
+Otherwise we'd consider it enabled.
+
+== Requirements
+
+=== Hard Requirements
+
+ * The bootstrap logging level will initially need to be set to `DEBUG` as by default the `org.jboss.as.config` category
+   is set to `DEBUG`.
+
+   ** The level setting will need to be overridable by the user. Likely the system property in the `JAVA_OPTS`.
+
+ * There does need to be a way disable bootstrap logging. This is likely only useful if the logging subsystem is not
+   used.
+
+ * Embedded CLI must continue to correctly log.
+
+   ** Currently this works because we have the `logging.properties` file. We'll need a way to ensure the bootstrap is
+      properly configured and the configuration completed.
+
+   ** The runtime stages are never invoked which means
+         logging would not really be configured. If possible a two-stage commit could work. Where some handlers, e.g.
+         `ConsoleHandler` or `FileHandler`, could be committed in a `Stage.MODEL` stage, but a handler like `SocketHandler`
+         wouldn't be committed until `Stage.RUNTIME`.
+
+         *** The main issue with a two-stage commit is at some point we may need to convert back to using services in WildFly.
+
+
+ * This must not break WildFly Swarm or OpenShift.
+
+   ** OpenShift likely won't break, but it does need to be tested. However I think OpenShift does alter the
+      `logging.properties`.
+
+ * The launcher API needs to be changed to ensure it behaves the same as startup scripts.
+
+ * Per-deployment logging and logging profiles may also need to be bootstrapped.
+
+   ** This may not need to be done as deployments likely shouldn't log until the logging subsystem `Stage.RUNTIME` has
+      has been run. However this should be tested with various startup EJB's and servlets.
+
+ * The `appclient` must also be supported.
+
+=== Nice-to-Have Requirements
+
+
+=== Non-Requirements
+
+== Other notes
+
+As an aside we really should look at making logging more resilient to other log managers being used.

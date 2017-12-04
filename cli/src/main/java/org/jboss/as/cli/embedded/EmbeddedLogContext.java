@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.logging.Handler;
 
 import org.jboss.as.cli.CommandContext;
+import org.jboss.logmanager.BootstrapConfiguration;
 import org.jboss.logmanager.Configurator;
 import org.jboss.logmanager.Level;
 import org.jboss.logmanager.LogContext;
@@ -48,7 +49,7 @@ import org.wildfly.security.manager.WildFlySecurityManager;
 class EmbeddedLogContext {
 
     private static class Holder {
-        static final LogContext LOG_CONTEXT = LogContext.create();
+        static final LogContext LOG_CONTEXT = LogContext.create(BootstrapConfiguration.create(true).useFileHandler(Paths.get("boot-failure.log")));
     }
 
 
@@ -64,6 +65,7 @@ class EmbeddedLogContext {
      */
     static synchronized LogContext configureLogContext(final File logDir, final File configDir, final String defaultLogFileName, final CommandContext ctx) {
         final LogContext embeddedLogContext = Holder.LOG_CONTEXT;
+        // TODO (jrp) we will have a problem here when we get rid of the logging.properties
         final Path bootLog = logDir.toPath().resolve(Paths.get(defaultLogFileName));
         final Path loggingProperties = configDir.toPath().resolve(Paths.get("logging.properties"));
         if (Files.exists(loggingProperties)) {
@@ -118,6 +120,7 @@ class EmbeddedLogContext {
                     logger.setLevel(Level.INFO);
                 }
             }
+            embeddedLogContext.configurationComplete();
         }
     }
 

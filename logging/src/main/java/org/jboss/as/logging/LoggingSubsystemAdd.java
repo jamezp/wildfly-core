@@ -46,7 +46,6 @@ import org.jboss.as.server.AbstractDeploymentChainStep;
 import org.jboss.as.server.DeploymentProcessorTarget;
 import org.jboss.as.server.deployment.Phase;
 import org.jboss.dmr.ModelNode;
-import org.jboss.logmanager.config.LogContextConfiguration;
 
 /**
  * @author <a href="mailto:jperkins@redhat.com">James R. Perkins</a>
@@ -93,23 +92,22 @@ class LoggingSubsystemAdd extends AbstractAddStepHandler {
         final Resource resource = context.readResource(PathAddress.EMPTY_ADDRESS);
 
         final ConfigurationPersistence configurationPersistence = ConfigurationPersistence.getOrCreateConfigurationPersistence();
-        final LogContextConfiguration logContextConfiguration = configurationPersistence.getLogContextConfiguration();
         // root logger
         if (!resource.hasChild(RootLoggerResourceDefinition.ROOT_LOGGER_PATH)) {
             LoggingLogger.ROOT_LOGGER.tracef("Removing the root logger configuration.");
-            logContextConfiguration.removeLoggerConfiguration(CommonAttributes.ROOT_LOGGER_NAME);
+            configurationPersistence.removeLoggerConfiguration(CommonAttributes.ROOT_LOGGER_NAME);
         }
 
         // remove all configured loggers which aren't in the model
         if (resource.hasChild(PathElement.pathElement(LoggerResourceDefinition.LOGGER))) {
             final Set<String> loggerNames = resource.getChildrenNames(LoggerResourceDefinition.LOGGER);
-            final List<String> configuredLoggerNames = logContextConfiguration.getLoggerNames();
+            final List<String> configuredLoggerNames = configurationPersistence.getLoggerNames();
             // Always remove the root
             configuredLoggerNames.remove(CommonAttributes.ROOT_LOGGER_NAME);
             configuredLoggerNames.removeAll(loggerNames);
             for (String name : configuredLoggerNames) {
                 LoggingLogger.ROOT_LOGGER.tracef("Removing logger configuration for '%s'", name);
-                logContextConfiguration.removeLoggerConfiguration(name);
+                configurationPersistence.removeLoggerConfiguration(name);
             }
         }
 
@@ -125,18 +123,18 @@ class LoggingSubsystemAdd extends AbstractAddStepHandler {
         subsystemHandlers.addAll(resource.getChildrenNames(SyslogHandlerResourceDefinition.SYSLOG_HANDLER));
 
         // handlers
-        final List<String> configuredHandlerNames = logContextConfiguration.getHandlerNames();
+        final List<String> configuredHandlerNames = configurationPersistence.getHandlerNames();
         configuredHandlerNames.removeAll(subsystemHandlers);
         for (String name : configuredHandlerNames) {
             LoggingLogger.ROOT_LOGGER.tracef("Removing handler configuration for '%s'", name);
             // Clean up any possible POJO references
-            logContextConfiguration.removePojoConfiguration(name);
+            configurationPersistence.removePojoConfiguration(name);
             // Remove the handler configuration
-            logContextConfiguration.removeHandlerConfiguration(name);
+            configurationPersistence.removeHandlerConfiguration(name);
         }
 
         // Remove formatters
-        final List<String> configuredFormatters = logContextConfiguration.getFormatterNames();
+        final List<String> configuredFormatters = configurationPersistence.getFormatterNames();
         configuredFormatters.removeAll(resource.getChildrenNames(PatternFormatterResourceDefinition.PATTERN_FORMATTER.getName()));
         configuredFormatters.removeAll(resource.getChildrenNames(CustomFormatterResourceDefinition.CUSTOM_FORMATTER.getName()));
         // Formatter names could also be the name of a handler if the formatter attribute is used rather than a named-formatter
@@ -145,7 +143,7 @@ class LoggingSubsystemAdd extends AbstractAddStepHandler {
         for (String name : configuredFormatters) {
             LoggingLogger.ROOT_LOGGER.tracef("Removing formatter configuration for '%s'", name);
             // Remove the formatter configuration
-            logContextConfiguration.removeFormatterConfiguration(name);
+            configurationPersistence.removeFormatterConfiguration(name);
         }
 
         LoggingOperations.addCommitStep(context, configurationPersistence);

@@ -1,28 +1,27 @@
 /*
-* JBoss, Home of Professional Open Source.
-* Copyright 2011, Red Hat Middleware LLC, and individual contributors
-* as indicated by the @author tags. See the copyright.txt file in the
-* distribution for a full listing of individual contributors.
-*
-* This is free software; you can redistribute it and/or modify it
-* under the terms of the GNU Lesser General Public License as
-* published by the Free Software Foundation; either version 2.1 of
-* the License, or (at your option) any later version.
-*
-* This software is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
-* Lesser General Public License for more details.
-*
-* You should have received a copy of the GNU Lesser General Public
-* License along with this software; if not, write to the Free
-* Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
-* 02110-1301 USA, or see the FSF site: http://www.fsf.org.
-*/
+ * JBoss, Home of Professional Open Source.
+ * Copyright 2011, Red Hat Middleware LLC, and individual contributors
+ * as indicated by the @author tags. See the copyright.txt file in the
+ * distribution for a full listing of individual contributors.
+ *
+ * This is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation; either version 2.1 of
+ * the License, or (at your option) any later version.
+ *
+ * This software is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this software; if not, write to the Free
+ * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
+ * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ */
 package org.jboss.as.logging;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
@@ -81,16 +80,6 @@ public class LoggingSubsystemTestCase extends AbstractLoggingSubsystemTest {
         final KernelServices kernelServices = boot();
         final ModelNode currentModel = getSubsystemModel(kernelServices);
         compare(currentModel, ConfigurationPersistence.getConfigurationPersistence(LogContext.getLogContext()));
-
-        // Compare properties written out to current model
-        final String dir = resolveRelativePath(kernelServices, "jboss.server.config.dir");
-        Assert.assertNotNull("jboss.server.config.dir could not be resolved", dir);
-        final LogContext logContext = LogContext.create();
-        final ConfigurationPersistence config = ConfigurationPersistence.getOrCreateConfigurationPersistence(logContext);
-        try (final FileInputStream in = new FileInputStream(new File(dir, "logging.properties"))) {
-            config.configure(in);
-            compare(currentModel, config);
-        }
     }
 
     @Test
@@ -156,7 +145,7 @@ public class LoggingSubsystemTestCase extends AbstractLoggingSubsystemTest {
 
     @Test
     public void testTransformersEAP700() throws Exception {
-        testEap7Transformer(ModelTestControllerVersion.EAP_7_0_0, ModelVersion.create(3, 0, 0), readResource("/logging_3_0.xml") );
+        testEap7Transformer(ModelTestControllerVersion.EAP_7_0_0, ModelVersion.create(3, 0, 0), readResource("/logging_3_0.xml"));
     }
 
     private void testEap7Transformer(final ModelTestControllerVersion controllerVersion, final ModelVersion legacyModelVersion, final String subsystemXml, final ModelFixer... modelFixers) throws Exception {

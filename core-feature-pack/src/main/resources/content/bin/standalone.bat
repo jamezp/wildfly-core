@@ -244,7 +244,33 @@ if not "%PRESERVE_JAVA_OPTS%" == "true" (
     )
 )
 
+rem Setup directories, note directories with spaces do not work
+setlocal EnableDelayedExpansion
+set bootstrapEnabled=false
+set bootstrapLevel=false
+set bootstrapFile=false
+for %%a in (!JAVA_OPTS!) do (
+   if "%%~a" == "-Dorg.jboss.logmanager.bootstrap.enabled" (
+      set bootstrapEnabled=true
+   )
+   if "%%~a" == "-Dorg.jboss.logmanager.bootstrap.level" (
+      set bootstrapLevel=true
+   )
+   if "%%~a" == "-Dorg.jboss.logmanager.bootstrap.log.file" (
+      set bootstrapFile=true
+   )
+)
+if !bootstrapFile! == false (
+  set "JAVA_OPTS=-Dorg.jboss.logmanager.bootstrap.log.file=!JBOSS_LOG_DIR!\boot-failure.log !JAVA_OPTS!"
+)
+if !bootstrapLevel! == false (
+  set "JAVA_OPTS=-Dorg.jboss.logmanager.bootstrap.level=DEBUG !JAVA_OPTS!"
+)
+if !bootstrapEnabled! == false (
+  set "JAVA_OPTS=-Dorg.jboss.logmanager.bootstrap.enabled=true !JAVA_OPTS!"
+)
 
+setlocal DisableDelayedExpansion
 
 
 rem Set the module options
@@ -268,8 +294,6 @@ echo.
 
 :RESTART
   "%JAVA%" %JAVA_OPTS% ^
-   "-Dorg.jboss.boot.log.file=%JBOSS_LOG_DIR%\server.log" ^
-   "-Dlogging.configuration=file:%JBOSS_CONFIG_DIR%/logging.properties" ^
       -jar "%JBOSS_HOME%\jboss-modules.jar" ^
       %MODULE_OPTS% ^
       -mp "%JBOSS_MODULEPATH%" ^

@@ -38,7 +38,6 @@ import org.jboss.as.controller.services.path.PathManager;
 import org.jboss.as.logging.logmanager.ConfigurationPersistence;
 import org.jboss.dmr.ModelNode;
 import org.jboss.logmanager.LogContext;
-import org.jboss.logmanager.config.LogContextConfiguration;
 
 /**
  * @author <a href="mailto:jperkins@redhat.com">James R. Perkins</a>
@@ -85,26 +84,25 @@ public class LoggingProfileOperations {
                     public void execute(final OperationContext context, final ModelNode operation) throws OperationFailedException {
                         final ConfigurationPersistence configuration = ConfigurationPersistence.getConfigurationPersistence(logContext);
                         if (configuration != null) {
-                            final LogContextConfiguration logContextConfiguration = configuration.getLogContextConfiguration();
                             // Remove all loggers
-                            for (String loggerName : logContextConfiguration.getLoggerNames()) {
-                                logContextConfiguration.removeLoggerConfiguration(loggerName);
+                            for (String loggerName : configuration.getLoggerNames()) {
+                                configuration.removeLoggerConfiguration(loggerName);
                             }
                             // Remove all the handlers
-                            for (String handlerName : logContextConfiguration.getHandlerNames()) {
-                                logContextConfiguration.removeHandlerConfiguration(handlerName);
+                            for (String handlerName : configuration.getHandlerNames()) {
+                                configuration.removeHandlerConfiguration(handlerName);
                             }
                             // Remove all the filters
-                            for (String filterName : logContextConfiguration.getFilterNames()) {
-                                logContextConfiguration.removeFilterConfiguration(filterName);
+                            for (String filterName : configuration.getFilterNames()) {
+                                configuration.removeFilterConfiguration(filterName);
                             }
                             // Remove all the formatters
-                            for (String formatterName : logContextConfiguration.getFormatterNames()) {
-                                logContextConfiguration.removeFormatterConfiguration(formatterName);
+                            for (String formatterName : configuration.getFormatterNames()) {
+                                configuration.removeFormatterConfiguration(formatterName);
                             }
                             // Remove all the error managers
-                            for (String errorManager : logContextConfiguration.getErrorManagerNames()) {
-                                logContextConfiguration.removeErrorManagerConfiguration(errorManager);
+                            for (String errorManager : configuration.getErrorManagerNames()) {
+                                configuration.removeErrorManagerConfiguration(errorManager);
                             }
                             // Add a commit step
                             LoggingOperations.addCommitStep(context, configuration);

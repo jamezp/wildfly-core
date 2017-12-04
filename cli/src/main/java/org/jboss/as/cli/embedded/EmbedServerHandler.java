@@ -184,6 +184,7 @@ class EmbedServerHandler extends CommandHandlerWithHelp {
             contextSelector.pushLocal();
 
             StdioContext.setStdioContextSelector(contextSelector);
+            // TODO (jrp) this gets overridden when the LoggingExtension is initialized
             LogContext.setLogContextSelector(contextSelector);
 
             List<String> cmdsList = new ArrayList<>();

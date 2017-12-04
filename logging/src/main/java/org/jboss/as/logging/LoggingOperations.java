@@ -27,7 +27,6 @@ import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OP_
 import org.jboss.as.controller.AbstractWriteAttributeHandler;
 import org.jboss.as.controller.AttributeDefinition;
 import org.jboss.as.controller.OperationContext;
-import org.jboss.as.controller.OperationContext.AttachmentKey;
 import org.jboss.as.controller.OperationContext.ResultAction;
 import org.jboss.as.controller.OperationContext.ResultHandler;
 import org.jboss.as.controller.OperationContext.RollbackHandler;
@@ -37,11 +36,9 @@ import org.jboss.as.controller.OperationStepHandler;
 import org.jboss.as.controller.PathAddress;
 import org.jboss.as.controller.registry.Resource;
 import org.jboss.as.logging.logmanager.ConfigurationPersistence;
-import org.jboss.as.server.ServerEnvironment;
 import org.jboss.dmr.ModelNode;
 import org.jboss.logmanager.LogContext;
 import org.jboss.logmanager.config.LogContextConfiguration;
-import org.wildfly.security.manager.WildFlySecurityManager;
 
 /**
  * @author <a href="mailto:jperkins@redhat.com">James R. Perkins</a>
@@ -82,14 +79,11 @@ final class LoggingOperations {
     }
 
     private static final class CommitOperationStepHandler implements OperationStepHandler {
-        private static final AttachmentKey<Boolean> WRITTEN_KEY = AttachmentKey.create(Boolean.class);
         private final ConfigurationPersistence configurationPersistence;
-        private final boolean persistConfig;
 
         @SuppressWarnings("deprecation")
         CommitOperationStepHandler(final ConfigurationPersistence configurationPersistence) {
             this.configurationPersistence = configurationPersistence;
-            persistConfig = Boolean.parseBoolean(WildFlySecurityManager.getPropertyPrivileged(ServerEnvironment.JBOSS_PERSIST_SERVER_CONFIG, Boolean.toString(true)));
         }
 
         @Override
@@ -100,17 +94,8 @@ final class LoggingOperations {
                 public void handleResult(final ResultAction resultAction, final OperationContext context, final ModelNode operation) {
                     if (resultAction == ResultAction.KEEP) {
                         configurationPersistence.commit();
-                        if (!LoggingProfileOperations.isLoggingProfileAddress(getAddress(operation))) {
-                            // Write once
-                            if (context.getAttachment(WRITTEN_KEY) == null) {
-                                context.attachIfAbsent(WRITTEN_KEY, Boolean.TRUE);
-                                if (persistConfig) {
-                                    configurationPersistence.writeConfiguration(context);
-                                }
-                            }
-                        }
                     } else if (resultAction == ResultAction.ROLLBACK) {
-                        configurationPersistence.rollback();
+                        configurationPersistence.forget();
                     }
                 }
             });
@@ -153,9 +138,8 @@ final class LoggingOperations {
             } else {
                 configurationPersistence = ConfigurationPersistence.getOrCreateConfigurationPersistence();
             }
-            final LogContextConfiguration logContextConfiguration = configurationPersistence.getLogContextConfiguration();
 
-            execute(context, operation, name, logContextConfiguration);
+            execute(context, operation, name, configurationPersistence);
             // This should only check that it's a server for the commit step. The logging.properties may need to be written
             // in ADMIN_ONLY mode
             if (context.getProcessType().isServer()) {
@@ -164,7 +148,7 @@ final class LoggingOperations {
                 context.completeStep(new RollbackHandler() {
                     @Override
                     public void handleRollback(final OperationContext context, final ModelNode operation) {
-                        configurationPersistence.rollback();
+                        configurationPersistence.forget();
                     }
                 });
             }
@@ -197,14 +181,13 @@ final class LoggingOperations {
             final Resource resource = context.createResource(PathAddress.EMPTY_ADDRESS);
             final ModelNode model = resource.getModel();
             updateModel(operation, model);
-            if (context.isNormalServer()) {
-                context.addStep(new OperationStepHandler() {
-                    @Override
-                    public void execute(final OperationContext context, final ModelNode operation) throws OperationFailedException {
-                        performRuntime(context, operation, logContextConfiguration, name, model);
-                    }
-                }, Stage.RUNTIME);
-            }
+            // We always want to run RUNTIME stage logging steps
+            context.addStep(new OperationStepHandler() {
+                @Override
+                public void execute(final OperationContext context, final ModelNode operation) throws OperationFailedException {
+                    performRuntime(context, operation, logContextConfiguration, name, model);
+                }
+            }, Stage.RUNTIME);
         }
 
         /**
@@ -230,14 +213,12 @@ final class LoggingOperations {
             final Resource resource = context.readResourceForUpdate(PathAddress.EMPTY_ADDRESS);
             final ModelNode model = resource.getModel();
             updateModel(operation, model);
-            if (context.isNormalServer()) {
-                context.addStep(new OperationStepHandler() {
-                    @Override
-                    public void execute(final OperationContext context, final ModelNode operation) throws OperationFailedException {
-                        performRuntime(context, operation, logContextConfiguration, name, model);
-                    }
-                }, Stage.RUNTIME);
-            }
+            context.addStep(new OperationStepHandler() {
+                @Override
+                public void execute(final OperationContext context, final ModelNode operation) throws OperationFailedException {
+                    performRuntime(context, operation, logContextConfiguration, name, model);
+                }
+            }, Stage.RUNTIME);
         }
 
         /**
@@ -264,14 +245,12 @@ final class LoggingOperations {
             final ModelNode model = Resource.Tools.readModel(context.readResource(PathAddress.EMPTY_ADDRESS));
 
             performRemove(context, operation, logContextConfiguration, name, model);
-            if (context.isNormalServer()) {
-                context.addStep(new OperationStepHandler() {
-                    @Override
-                    public void execute(final OperationContext context, final ModelNode operation) throws OperationFailedException {
-                        performRuntime(context, operation, logContextConfiguration, name, model);
-                    }
-                }, Stage.RUNTIME);
-            }
+            context.addStep(new OperationStepHandler() {
+                @Override
+                public void execute(final OperationContext context, final ModelNode operation) throws OperationFailedException {
+                    performRuntime(context, operation, logContextConfiguration, name, model);
+                }
+            }, Stage.RUNTIME);
         }
 
         /**
@@ -313,9 +292,8 @@ final class LoggingOperations {
             } else {
                 configurationPersistence = ConfigurationPersistence.getOrCreateConfigurationPersistence();
             }
-            final LogContextConfiguration logContextConfiguration = configurationPersistence.getLogContextConfiguration();
             handbackHolder.setHandback(configurationPersistence);
-            final boolean restartRequired = applyUpdate(context, attributeName, name, resolvedValue, logContextConfiguration);
+            final boolean restartRequired = applyUpdate(context, attributeName, name, resolvedValue, configurationPersistence);
             addCommitStep(context, configurationPersistence);
             return restartRequired;
         }
@@ -337,9 +315,8 @@ final class LoggingOperations {
 
         @Override
         protected void revertUpdateToRuntime(final OperationContext context, final ModelNode operation, final String attributeName, final ModelNode valueToRestore, final ModelNode valueToRevert, final ConfigurationPersistence configurationPersistence) throws OperationFailedException {
-            final LogContextConfiguration logContextConfiguration = configurationPersistence.getLogContextConfiguration();
             // First forget the configuration
-            logContextConfiguration.forget();
+            configurationPersistence.forget();
         }
 
         @Override

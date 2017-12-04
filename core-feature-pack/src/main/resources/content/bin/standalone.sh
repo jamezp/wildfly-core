@@ -285,6 +285,20 @@ if [ "x$SECURITY_MANAGER_SET" != "x" ]; then
     exit 1
 fi
 
+# Configure bootstrap logging
+LOGGING_PROP=`echo $JAVA_OPTS | $GREP "\-Dorg.jboss.logmanager.bootstrap.log.file"`
+if [ "x$LOGGING_PROP" == "x" ]; then
+    JAVA_OPTS="-Dorg.jboss.logmanager.bootstrap.log.file=$JBOSS_LOG_DIR/boot-failure.log $JAVA_OPTS"
+fi
+LOGGING_PROP=`echo $JAVA_OPTS | $GREP "\-Dorg.jboss.logmanager.bootstrap.level"`
+if [ "x$LOGGING_PROP" == "x" ]; then
+    JAVA_OPTS="-Dorg.jboss.logmanager.bootstrap.level=DEBUG $JAVA_OPTS"
+fi
+LOGGING_PROP=`echo $JAVA_OPTS | $GREP "\-Dorg.jboss.logmanager.bootstrap.enabled"`
+if [ "x$LOGGING_PROP" == "x" ]; then
+    JAVA_OPTS="-Dorg.jboss.logmanager.bootstrap.enabled=true $JAVA_OPTS"
+fi
+
 # Set up the module arguments
 MODULE_OPTS=""
 if [ "$SECMGR" = "true" ]; then
@@ -309,9 +323,6 @@ while true; do
    if [ "x$LAUNCH_JBOSS_IN_BACKGROUND" = "x" ]; then
       # Execute the JVM in the foreground
       eval \"$JAVA\" -D\"[Standalone]\" $JAVA_OPTS \
-         \"-Dorg.jboss.logmanager.bootstrap.log.file="$JBOSS_LOG_DIR"/boot-failure.log\" \
-         \"-Dorg.jboss.logmanager.bootstrap.enabled=true\" \
-         \"-Dorg.jboss.logmanager.bootstrap.level=DEBUG\" \
          -jar \""$JBOSS_HOME"/jboss-modules.jar\" \
          $MODULE_OPTS \
          -mp \""${JBOSS_MODULEPATH}"\" \
@@ -323,9 +334,6 @@ while true; do
    else
       # Execute the JVM in the background
       eval \"$JAVA\" -D\"[Standalone]\" $JAVA_OPTS \
-         \"-Dorg.jboss.logmanager.bootstrap.log.file="$JBOSS_LOG_DIR"/boot-failure.log\" \
-         \"-Dorg.jboss.logmanager.bootstrap.enabled=true\" \
-         \"-Dorg.jboss.logmanager.bootstrap.level=DEBUG\" \
          -jar \""$JBOSS_HOME"/jboss-modules.jar\" \
          $MODULE_OPTS \
          -mp \""${JBOSS_MODULEPATH}"\" \
