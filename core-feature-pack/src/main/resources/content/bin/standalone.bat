@@ -249,6 +249,7 @@ setlocal EnableDelayedExpansion
 set bootstrapEnabled=false
 set bootstrapLevel=false
 set bootstrapFile=false
+set bootstrapCalcCaller=false
 for %%a in (!JAVA_OPTS!) do (
    if "%%~a" == "-Dorg.jboss.logmanager.bootstrap.enabled" (
       set bootstrapEnabled=true
@@ -259,6 +260,9 @@ for %%a in (!JAVA_OPTS!) do (
    if "%%~a" == "-Dorg.jboss.logmanager.bootstrap.log.file" (
       set bootstrapFile=true
    )
+   if "%%~a" == "-Dorg.jboss.logmanager.bootstrap.calculate.caller" (
+      set bootstrapCalcCaller=true
+   )
 )
 if !bootstrapFile! == false (
   set "JAVA_OPTS=-Dorg.jboss.logmanager.bootstrap.log.file=!JBOSS_LOG_DIR!\boot-failure.log !JAVA_OPTS!"
@@ -268,6 +272,9 @@ if !bootstrapLevel! == false (
 )
 if !bootstrapEnabled! == false (
   set "JAVA_OPTS=-Dorg.jboss.logmanager.bootstrap.enabled=true !JAVA_OPTS!"
+)
+if !bootstrapCalcCaller! == false (
+  set "JAVA_OPTS=-Dorg.jboss.logmanager.bootstrap.calculate.caller=false !JAVA_OPTS!"
 )
 
 setlocal DisableDelayedExpansion

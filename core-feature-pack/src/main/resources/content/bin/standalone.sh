@@ -286,6 +286,10 @@ if [ "x$SECURITY_MANAGER_SET" != "x" ]; then
 fi
 
 # Configure bootstrap logging
+LOGGING_PROP=`echo $JAVA_OPTS | $GREP "\-Dorg.jboss.logmanager.bootstrap.calculate.caller"`
+if [ "x$LOGGING_PROP" == "x" ]; then
+    JAVA_OPTS="-Dorg.jboss.logmanager.bootstrap.calculate.caller=false $JAVA_OPTS"
+fi
 LOGGING_PROP=`echo $JAVA_OPTS | $GREP "\-Dorg.jboss.logmanager.bootstrap.log.file"`
 if [ "x$LOGGING_PROP" == "x" ]; then
     JAVA_OPTS="-Dorg.jboss.logmanager.bootstrap.log.file=$JBOSS_LOG_DIR/boot-failure.log $JAVA_OPTS"

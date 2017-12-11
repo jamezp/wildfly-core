@@ -62,3 +62,13 @@ Otherwise we'd consider it enabled.
 == Other notes
 
 As an aside we really should look at making logging more resilient to other log managers being used.
+[quote, David Lloyd, http://lists.jboss.org/pipermail/wildfly-dev/2017-December/006215.html]
+____
+Also I think we should consider some kind of grimy hack to bootstrap
+the logging subsystem first, if it's present, otherwise immediately
+fall back to properties-based config if it's absent.
+____
+
+NOTE: This may be possible using a custom `ConfigurationLocator` otherwise we have to use some script hacks which is
+not ideal. Using a `Configurator` may work as well, however this means we still need to keep around the
+`logging.properties` file as well as keep writing the configuration changes to it.
