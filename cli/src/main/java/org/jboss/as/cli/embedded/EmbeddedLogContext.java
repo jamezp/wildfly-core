@@ -49,7 +49,7 @@ import org.wildfly.security.manager.WildFlySecurityManager;
 class EmbeddedLogContext {
 
     private static class Holder {
-        static final LogContext LOG_CONTEXT = LogContext.create(BootstrapConfiguration.create(true).useFileHandler(Paths.get("boot-failure.log")));
+        static final LogContext LOG_CONTEXT = LogContext.create(BootstrapConfiguration.create(true));
     }
 
 
