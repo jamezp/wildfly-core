@@ -290,10 +290,6 @@ LOGGING_PROP=`echo $JAVA_OPTS | $GREP "\-Dorg.jboss.logmanager.bootstrap.calcula
 if [ "x$LOGGING_PROP" == "x" ]; then
     JAVA_OPTS="-Dorg.jboss.logmanager.bootstrap.calculate.caller=false $JAVA_OPTS"
 fi
-LOGGING_PROP=`echo $JAVA_OPTS | $GREP "\-Dorg.jboss.logmanager.bootstrap.log.file"`
-if [ "x$LOGGING_PROP" == "x" ]; then
-    JAVA_OPTS="-Dorg.jboss.logmanager.bootstrap.log.file=$JBOSS_LOG_DIR/boot-failure.log $JAVA_OPTS"
-fi
 LOGGING_PROP=`echo $JAVA_OPTS | $GREP "\-Dorg.jboss.logmanager.bootstrap.level"`
 if [ "x$LOGGING_PROP" == "x" ]; then
     JAVA_OPTS="-Dorg.jboss.logmanager.bootstrap.level=DEBUG $JAVA_OPTS"
@@ -327,6 +323,8 @@ while true; do
    if [ "x$LAUNCH_JBOSS_IN_BACKGROUND" = "x" ]; then
       # Execute the JVM in the foreground
       eval \"$JAVA\" -D\"[Standalone]\" $JAVA_OPTS \
+         \"-Dorg.jboss.boot.log.file="$JBOSS_LOG_DIR"/server.log\" \
+         -Dorg.jboss.logmanager.bootstrap.fallback.config=\"$JBOSS_CONFIG_DIR/logging.properties\" \
          -jar \""$JBOSS_HOME"/jboss-modules.jar\" \
          $MODULE_OPTS \
          -mp \""${JBOSS_MODULEPATH}"\" \
@@ -338,6 +336,8 @@ while true; do
    else
       # Execute the JVM in the background
       eval \"$JAVA\" -D\"[Standalone]\" $JAVA_OPTS \
+         \"-Dorg.jboss.boot.log.file="$JBOSS_LOG_DIR"/server.log\" \
+         -Dorg.jboss.logmanager.bootstrap.fallback.config=\"$JBOSS_CONFIG_DIR/logging.properties\" \
          -jar \""$JBOSS_HOME"/jboss-modules.jar\" \
          $MODULE_OPTS \
          -mp \""${JBOSS_MODULEPATH}"\" \

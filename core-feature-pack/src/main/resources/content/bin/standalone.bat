@@ -248,7 +248,6 @@ rem Setup directories, note directories with spaces do not work
 setlocal EnableDelayedExpansion
 set bootstrapEnabled=false
 set bootstrapLevel=false
-set bootstrapFile=false
 set bootstrapCalcCaller=false
 for %%a in (!JAVA_OPTS!) do (
    if "%%~a" == "-Dorg.jboss.logmanager.bootstrap.enabled" (
@@ -257,15 +256,9 @@ for %%a in (!JAVA_OPTS!) do (
    if "%%~a" == "-Dorg.jboss.logmanager.bootstrap.level" (
       set bootstrapLevel=true
    )
-   if "%%~a" == "-Dorg.jboss.logmanager.bootstrap.log.file" (
-      set bootstrapFile=true
-   )
    if "%%~a" == "-Dorg.jboss.logmanager.bootstrap.calculate.caller" (
       set bootstrapCalcCaller=true
    )
-)
-if !bootstrapFile! == false (
-  set "JAVA_OPTS=-Dorg.jboss.logmanager.bootstrap.log.file=!JBOSS_LOG_DIR!\boot-failure.log !JAVA_OPTS!"
 )
 if !bootstrapLevel! == false (
   set "JAVA_OPTS=-Dorg.jboss.logmanager.bootstrap.level=DEBUG !JAVA_OPTS!"
@@ -301,6 +294,8 @@ echo.
 
 :RESTART
   "%JAVA%" %JAVA_OPTS% ^
+      "-Dorg.jboss.boot.log.file=%JBOSS_LOG_DIR%\server.log" ^
+      "-Dorg.jboss.logmanager.bootstrap.fallback.config=%JBOSS_CONFIG_DIR%\logging.properties" ^
       -jar "%JBOSS_HOME%\jboss-modules.jar" ^
       %MODULE_OPTS% ^
       -mp "%JBOSS_MODULEPATH%" ^
