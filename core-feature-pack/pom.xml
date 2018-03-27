@@ -665,6 +665,10 @@
                                                     <name>version</name>
                                                     <value>${project.version}</value>
                                                 </parameter>
+                                                <parameter>
+                                                    <name>server.name</name>
+                                                    <value>${server.release.full.name}</value>
+                                                </parameter>
                                             </parameters>
                                         </transformationSet>
                                     </transformationSets>
@@ -715,7 +719,7 @@
         <profile>
             <id>javadocDist</id>
             <properties>
-                <javadoc.branding>WildFly public API - ${project.version}</javadoc.branding>
+                <javadoc.branding>${server.release.name} public API - ${server.release.version}</javadoc.branding>
             </properties>
             <build>
                 <plugins>

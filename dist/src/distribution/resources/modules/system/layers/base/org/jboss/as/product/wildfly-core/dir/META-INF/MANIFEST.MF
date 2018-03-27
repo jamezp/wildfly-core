@@ -1,2 +1,2 @@
-JBoss-Project-Release-Name: WildFly Core
-JBoss-Product-Release-Version: ${project.version}
+JBoss-Project-Release-Name: ${server.release.full.name}
+JBoss-Product-Release-Version: ${server.release.version}

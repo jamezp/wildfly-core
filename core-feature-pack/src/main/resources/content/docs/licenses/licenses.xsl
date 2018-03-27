@@ -4,9 +4,11 @@
 
     <xsl:output method="html" encoding="utf-8" standalone="no" media-type="text/html" />
     <xsl:param name="version"/>
+    <xsl:param name="server.name"/>
+    <xsl:variable name="server.full.name" select="concat($server.name, ' ', $version)"/>
     <xsl:variable name="lowercase" select="'abcdefghijklmnopqrstuvwxyz '" />
     <xsl:variable name="uppercase" select="'ABCDEFGHIJKLMNOPQRSTUVWXYZ!'" />
-    
+
     <xsl:template match="/">
         <html>
             <head>
@@ -14,7 +16,7 @@
                 <link rel="stylesheet" type="text/css" href="licenses.css"/>
             </head>
             <body>
-                <h2>Wildfly Core <xsl:value-of select="$version"/></h2>
+                <h2><xsl:value-of select="$server.full.name"/></h2>
                 <p>The following material has been provided for informational purposes only, and should not be relied upon or construed as a legal opinion or legal advice.</p>
                 <!-- Read matching templates -->
                 <table>
