@@ -151,6 +151,14 @@ public class LoggingConfigDeploymentProcessor extends AbstractLoggingDeploymentP
         }
     }
 
+    @Override
+    void undeploy(final DeploymentUnit deploymentUnit, final LogContext logContext) {
+        if (logContext != null) {
+            // TODO (jrp) one thing to consider is the order of DUP's. The context may be closed before the fully undeployed.
+            //safeClose(logContext);
+        }
+    }
+
     /**
      * Finds the configuration file to be used and returns the first one found.
      * <p/>

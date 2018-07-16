@@ -22,7 +22,6 @@
 
 package org.jboss.as.logging.deployments;
 
-import java.io.Closeable;
 import java.security.PrivilegedAction;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -88,13 +87,16 @@ abstract class AbstractLoggingDeploymentProcessor implements DeploymentUnitProce
         // Remove either the default log context or a defined log context. It's safe to attempt to remove a
         // nonexistent context.
         unregisterLogContext(context, DEFAULT_LOG_CONTEXT_KEY, module);
-        unregisterLogContext(context, LOG_CONTEXT_KEY, module);
+        // TODO (jrp) in the case of a LOG_CONTEXT_KEY we may need to close the LogContext, e.g. per-deployment
+        LogContext logContext = unregisterLogContext(context, LOG_CONTEXT_KEY, module);
+        undeploy(context, logContext);
         // Unregister all sub-deployments
         final List<DeploymentUnit> subDeployments = getSubDeployments(context);
         for (DeploymentUnit subDeployment : subDeployments) {
             final Module subDeploymentModule = subDeployment.getAttachment(Attachments.MODULE);
             // Sub-deployment should never have a default log context
-            unregisterLogContext(subDeployment, LOG_CONTEXT_KEY, subDeploymentModule);
+            logContext = unregisterLogContext(subDeployment, LOG_CONTEXT_KEY, subDeploymentModule);
+            undeploy(subDeployment, logContext);
         }
     }
 
@@ -108,6 +110,8 @@ abstract class AbstractLoggingDeploymentProcessor implements DeploymentUnitProce
      * @throws DeploymentUnitProcessingException if an error occurs during processing
      */
     protected abstract void processDeployment(DeploymentPhaseContext phaseContext, DeploymentUnit deploymentUnit, ResourceRoot root) throws DeploymentUnitProcessingException;
+
+    abstract void undeploy(DeploymentUnit deploymentUnit, LogContext logContext);
 
     void registerLogContext(final DeploymentUnit deploymentUnit, final Module module, final LogContext logContext) {
         // If the default log context is registered we need to remove it and unregister before we register a defined log
@@ -133,7 +137,7 @@ abstract class AbstractLoggingDeploymentProcessor implements DeploymentUnitProce
         deploymentUnit.putAttachment(attachmentKey, logContext);
     }
 
-    private void unregisterLogContext(final DeploymentUnit deploymentUnit, final AttachmentKey<LogContext> attachmentKey, final Module module) {
+    private LogContext unregisterLogContext(final DeploymentUnit deploymentUnit, final AttachmentKey<LogContext> attachmentKey, final Module module) {
         final LogContext logContext = deploymentUnit.removeAttachment(attachmentKey);
         if (logContext != null) {
             final boolean success;
@@ -153,6 +157,7 @@ abstract class AbstractLoggingDeploymentProcessor implements DeploymentUnitProce
                 LoggingLogger.ROOT_LOGGER.logContextNotRemoved(logContext, deploymentUnit.getName());
             }
         }
+        return logContext;
     }
 
     static List<DeploymentUnit> getSubDeployments(final DeploymentUnit deploymentUnit) {
@@ -162,7 +167,7 @@ abstract class AbstractLoggingDeploymentProcessor implements DeploymentUnitProce
         return Collections.emptyList();
     }
 
-    static void safeClose(final Closeable closable) {
+    static void safeClose(final AutoCloseable closable) {
         if (closable != null) try {
             closable.close();
         } catch (Exception e) {

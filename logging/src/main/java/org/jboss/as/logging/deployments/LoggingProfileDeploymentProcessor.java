@@ -98,6 +98,13 @@ public class LoggingProfileDeploymentProcessor extends AbstractLoggingDeployment
         }
     }
 
+    @Override
+    void undeploy(final DeploymentUnit deploymentUnit, final LogContext logContext) {
+        if (logContext != null) {
+            // TODO (jrp) we need to decrement the registered count here in the LoggingProfileContextSelector
+        }
+    }
+
     /**
      * Find the logging profile attached to any resource.
      *

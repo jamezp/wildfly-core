@@ -30,6 +30,8 @@ import org.jboss.logmanager.LogContext;
 /**
  * @author <a href="mailto:jperkins@redhat.com">James R. Perkins</a>
  */
+// TODO (jrp) it would be nice to make this go away and maybe just somehow use the WildFlyLogContextSelector.
+// TODO (jrp) One possible idea is to have a getNamedLogContext(final String name).
 public final class LoggingProfileContextSelector {
     private static final LoggingProfileContextSelector INSTANCE = new LoggingProfileContextSelector();
 

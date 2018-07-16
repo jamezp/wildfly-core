@@ -22,17 +22,9 @@
 
 package org.jboss.as.logging.logmanager;
 
-import java.util.Collections;
-import java.util.List;
-import java.util.logging.Handler;
-
-import org.jboss.logmanager.Configurator;
-import org.jboss.logmanager.Level;
+import org.jboss.as.logging.logging.LoggingLogger;
 import org.jboss.logmanager.LogContext;
 import org.jboss.logmanager.LogContextSelector;
-import org.jboss.logmanager.Logger;
-import org.jboss.logmanager.PropertyConfigurator;
-import org.jboss.logmanager.config.LogContextConfiguration;
 
 /**
  * The log context selector to use for the WildFly logging extension.
@@ -107,6 +99,7 @@ public interface WildFlyLogContextSelector extends LogContextSelector {
      *
      * @return the number of registered log contexts
      */
+    // TODO (jrp) remove this, although either a count per CL or count per-name could be of interest
     int registeredCount();
 
     class Factory {
@@ -129,71 +122,12 @@ public interface WildFlyLogContextSelector extends LogContextSelector {
          * @return a new selector
          */
         public static WildFlyLogContextSelector createEmbedded() {
-            clearLogContext();
+            try {
+                EMBEDDED_LOG_CONTEXT.close();
+            } catch (Exception e) {
+                LoggingLogger.ROOT_LOGGER.failedToCloseResource(e, EMBEDDED_LOG_CONTEXT);
+            }
             return new WildFlyLogContextSelectorImpl(EMBEDDED_LOG_CONTEXT);
         }
-
-        private static void clearLogContext() {
-            // Remove the configurator and clear the log context
-            final Configurator configurator = EMBEDDED_LOG_CONTEXT.getLogger("").detach(Configurator.ATTACHMENT_KEY);
-            // If this was a PropertyConfigurator we can use the LogContextConfiguration API to tear down the LogContext
-            if (configurator instanceof PropertyConfigurator) {
-                final LogContextConfiguration logContextConfiguration = ((PropertyConfigurator) configurator).getLogContextConfiguration();
-                clearLogContext(logContextConfiguration);
-            } else if (configurator instanceof LogContextConfiguration) {
-                clearLogContext((LogContextConfiguration) configurator);
-            } else {
-                // Remove all the handlers and close them as well as reset the loggers
-                final List<String> loggerNames = Collections.list(EMBEDDED_LOG_CONTEXT.getLoggerNames());
-                for (String name : loggerNames) {
-                    final Logger logger = EMBEDDED_LOG_CONTEXT.getLoggerIfExists(name);
-                    if (logger != null) {
-                        final Handler[] handlers = logger.clearHandlers();
-                        if (handlers != null) {
-                            for (Handler handler : handlers) {
-                                handler.close();
-                            }
-                        }
-                        logger.setFilter(null);
-                        logger.setUseParentFilters(false);
-                        logger.setUseParentHandlers(true);
-                        logger.setLevel(Level.INFO);
-                    }
-                }
-            }
-        }
-
-        private static void clearLogContext(final LogContextConfiguration logContextConfiguration) {
-            try {
-                // Remove all the loggers
-                for (String name : logContextConfiguration.getLoggerNames()) {
-                    logContextConfiguration.removeLoggerConfiguration(name);
-                }
-                // Remove all the handlers
-                for (String name : logContextConfiguration.getHandlerNames()) {
-                    logContextConfiguration.removeHandlerConfiguration(name);
-                }
-                // Remove all the formatters
-                for (String name : logContextConfiguration.getFormatterNames()) {
-                    logContextConfiguration.removeFormatterConfiguration(name);
-                }
-                // Remove all the error managers
-                for (String name : logContextConfiguration.getErrorManagerNames()) {
-                    logContextConfiguration.removeErrorManagerConfiguration(name);
-                }
-                // Remove all the POJO's
-                for (String name : logContextConfiguration.getPojoNames()) {
-                    logContextConfiguration.removePojoConfiguration(name);
-                }
-                // Remove all the filters
-                for (String name : logContextConfiguration.getFilterNames()) {
-                    logContextConfiguration.removeFilterConfiguration(name);
-                }
-                logContextConfiguration.commit();
-            } finally {
-                logContextConfiguration.forget();
-            }
-        }
     }
-
 }

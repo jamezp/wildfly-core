@@ -32,6 +32,7 @@ import org.jboss.logmanager.ThreadLocalLogContextSelector;
 /**
 * @author <a href="mailto:jperkins@redhat.com">James R. Perkins</a>
 */
+// TODO (jrp) can this be modified to skip the ClassLoaderLogContextSelector if we know we're using the logging subsystem?
 class WildFlyLogContextSelectorImpl implements WildFlyLogContextSelector {
 
     private final ClassLoaderLogContextSelector contextSelector;
