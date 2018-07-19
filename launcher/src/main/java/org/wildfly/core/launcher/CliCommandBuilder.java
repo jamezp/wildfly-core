@@ -344,7 +344,7 @@ public class CliCommandBuilder implements CommandBuilder {
      * @return the builder
      */
     public CliCommandBuilder setUseGui() {
-        if (Environment.isMac()) {
+        if (environment.isMac()) {
             addJavaOption("-Djboss.modules.system.pkgs=com.apple.laf,com.apple.laf.resources");
         } else {
             addJavaOption("-Djboss.modules.system.pkgs=com.sun.java.swing");

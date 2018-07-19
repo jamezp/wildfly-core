@@ -62,11 +62,20 @@ public class DomainCommandBuilder extends AbstractCommandBuilder<DomainCommandBu
      * @param javaHome    the default Java home directory
      */
     private DomainCommandBuilder(final Path wildflyHome, final Path javaHome) {
-        super(wildflyHome, javaHome);
+        this(new Environment(wildflyHome).setJavaHome(javaHome));
+    }
+
+    /**
+     * Creates a new command builder for a domain instance of WildFly.
+     *
+     * @param environment the environment to use
+     */
+    private DomainCommandBuilder(final Environment environment) {
+        super(environment);
         hostControllerJavaOpts = new Arguments();
-        hostControllerJavaOpts.addAll(DEFAULT_VM_ARGUMENTS);
+        hostControllerJavaOpts.addAll(environment.getJavaOptions());
         processControllerJavaOpts = new Arguments();
-        processControllerJavaOpts.addAll(DEFAULT_VM_ARGUMENTS);
+        processControllerJavaOpts.addAll(environment.getJavaOptions());
     }
 
     /**
@@ -117,6 +126,10 @@ public class DomainCommandBuilder extends AbstractCommandBuilder<DomainCommandBu
      */
     public static DomainCommandBuilder of(final Path wildflyHome, final Path javaHome) {
         return new DomainCommandBuilder(validateWildFlyDir(wildflyHome), validateJavaHome(javaHome));
+    }
+
+    static DomainCommandBuilder of(final Environment environment) {
+        return new DomainCommandBuilder(environment);
     }
 
     /**

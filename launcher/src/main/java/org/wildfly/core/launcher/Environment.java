@@ -47,7 +47,7 @@ class Environment {
     private static final String JMODS_DIR = "jmods";
 
     static {
-        final String os = System.getProperty("os.name").toLowerCase(Locale.ROOT);
+        final String os = SecurityActions.getSystemProperty("os.name").toLowerCase(Locale.ROOT);
         MAC = os.startsWith("mac");
         WINDOWS = os.contains("win");
         String exe = "java";
@@ -77,6 +77,19 @@ class Environment {
         addDefaultModuleDir = true;
     }
 
+    static Environment determine() {
+        // First check the system property
+        String path = getFirstValue("jboss.home", "jboss.home.dir");
+        if (path == null) {
+            path = SecurityActions.getenv("JBOSS_HOME");
+            if (path == null) {
+                path = SecurityActions.getSystemProperty("user.dir");
+            }
+        }
+        // TODO (jrp) this likely needs to be done a bit differently where the Environment is better used
+        return new Environment(validateWildFlyDir(path));
+    }
+
     /**
      * Returns the WildFly Home directory.
      *
@@ -102,13 +115,14 @@ class Environment {
      *
      * @throws java.lang.IllegalArgumentException if the path is {@code null}
      */
-    public void addModuleDir(final String moduleDir) {
+    public Environment addModuleDir(final String moduleDir) {
         if (moduleDir == null) {
             throw LauncherMessages.MESSAGES.nullParam("moduleDir");
         }
         // Validate the path
         final Path path = Paths.get(moduleDir).normalize();
         modulesDirs.add(path.toString());
+        return this;
     }
 
     /**
@@ -118,11 +132,12 @@ class Environment {
      *
      * @throws java.lang.IllegalArgumentException if any of the module paths are invalid or {@code null}
      */
-    public void addModuleDirs(final String... moduleDirs) {
+    public Environment addModuleDirs(final String... moduleDirs) {
         // Validate and add each path
         for (String path : moduleDirs) {
             addModuleDir(path);
         }
+        return this;
     }
 
     /**
@@ -132,11 +147,12 @@ class Environment {
      *
      * @throws java.lang.IllegalArgumentException if any of the module paths are invalid or {@code null}
      */
-    public void addModuleDirs(final Iterable<String> moduleDirs) {
+    public Environment addModuleDirs(final Iterable<String> moduleDirs) {
         // Validate and add each path
         for (String path : moduleDirs) {
             addModuleDir(path);
         }
+        return this;
     }
 
     /**
@@ -148,13 +164,14 @@ class Environment {
      *
      * @throws java.lang.IllegalArgumentException if any of the module paths are invalid or {@code null}
      */
-    public void setModuleDirs(final Iterable<String> moduleDirs) {
+    public Environment setModuleDirs(final Iterable<String> moduleDirs) {
         this.modulesDirs.clear();
         // Process each module directory
         for (String path : moduleDirs) {
             addModuleDir(path);
         }
         addDefaultModuleDir = false;
+        return this;
     }
 
     /**
@@ -166,13 +183,14 @@ class Environment {
      *
      * @throws java.lang.IllegalArgumentException if any of the module paths are invalid or {@code null}
      */
-    public void setModuleDirs(final String... moduleDirs) {
+    public Environment setModuleDirs(final String... moduleDirs) {
         this.modulesDirs.clear();
         // Process each module directory
         for (String path : moduleDirs) {
             addModuleDir(path);
         }
         addDefaultModuleDir = false;
+        return this;
     }
 
     /**
@@ -202,12 +220,13 @@ class Environment {
      *
      * @param javaHome the Java home or {@code null} to use te system property {@code java.home}
      */
-    public void setJavaHome(final String javaHome) {
+    public Environment setJavaHome(final String javaHome) {
         if (javaHome == null) {
             this.javaHome = null;
         } else {
             this.javaHome = validateJavaHome(javaHome);
         }
+        return this;
     }
 
     /**
@@ -215,12 +234,13 @@ class Environment {
      *
      * @param javaHome the Java home or {@code null} to use te system property {@code java.home}
      */
-    public void setJavaHome(final Path javaHome) {
+    public Environment setJavaHome(final Path javaHome) {
         if (javaHome == null) {
             this.javaHome = null;
         } else {
             this.javaHome = validateJavaHome(javaHome);
         }
+        return this;
     }
 
     /**
@@ -293,11 +313,11 @@ class Environment {
         return result;
     }
 
-    public static boolean isMac() {
+    boolean isMac() {
         return MAC;
     }
 
-    public static boolean isWindows() {
+    boolean isWindows() {
         return WINDOWS;
     }
 
@@ -351,6 +371,16 @@ class Environment {
             throw LauncherMessages.MESSAGES.invalidDirectory(exe.subpath(count - 2, count).toString(), javaHome);
         }
         return result;
+    }
+
+    private static String getFirstValue(final String... keys) {
+        for (String key : keys) {
+            final String value = SecurityActions.getSystemProperty(key);
+            if (value != null) {
+                return value;
+            }
+        }
+        return null;
     }
 
     static boolean isModularJavaHome(final String javaHome) {

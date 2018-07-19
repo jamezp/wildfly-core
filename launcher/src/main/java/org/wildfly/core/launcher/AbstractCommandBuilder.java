@@ -27,7 +27,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 
 import org.wildfly.core.launcher.Arguments.Argument;
@@ -77,6 +76,12 @@ abstract class AbstractCommandBuilder<T extends AbstractCommandBuilder<T>> imple
     protected AbstractCommandBuilder(final Path wildflyHome, final Path javaHome) {
         environment = new Environment(wildflyHome);
         environment.setJavaHome(javaHome);
+        useSecMgr = false;
+        serverArgs = new Arguments();
+    }
+
+    AbstractCommandBuilder(final Environment environment) {
+        this.environment = environment;
         useSecMgr = false;
         serverArgs = new Arguments();
     }

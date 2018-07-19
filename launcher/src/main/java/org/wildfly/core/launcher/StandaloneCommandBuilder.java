@@ -65,9 +65,18 @@ public class StandaloneCommandBuilder extends AbstractCommandBuilder<StandaloneC
      * @param wildflyHome the path to WildFly
      */
     private StandaloneCommandBuilder(final Path wildflyHome) {
-        super(wildflyHome);
+        this(new Environment(wildflyHome));
+    }
+
+    /**
+     * Creates a new command builder for a standalone instance.
+     *
+     * @param environment the environment to use
+     */
+    private StandaloneCommandBuilder(final Environment environment) {
+        super(environment);
         javaOpts = new Arguments();
-        javaOpts.addAll(DEFAULT_VM_ARGUMENTS);
+        javaOpts.addAll(environment.getJavaOptions());
         securityProperties = new LinkedHashMap<>();
     }
 
@@ -91,6 +100,10 @@ public class StandaloneCommandBuilder extends AbstractCommandBuilder<StandaloneC
      */
     public static StandaloneCommandBuilder of(final String wildflyHome) {
         return new StandaloneCommandBuilder(validateWildFlyDir(wildflyHome));
+    }
+
+    static StandaloneCommandBuilder of(final Environment environment) {
+        return new StandaloneCommandBuilder(environment);
     }
 
     /**
