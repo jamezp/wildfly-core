@@ -33,7 +33,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-import org.wildfly.core.launcher.Arguments.Argument;
 import org.wildfly.core.launcher.logger.LauncherMessages;
 
 /**
@@ -448,7 +447,7 @@ public class CliCommandBuilder implements CommandBuilder {
      */
     public CliCommandBuilder addCliArgument(final String arg) {
         if (arg != null) {
-            final Argument argument = Arguments.parse(arg);
+            final Argument argument = Argument.parse(arg);
             final CliArgument cliArgument = CliArgument.find(argument.getKey());
             if (cliArgument != null) {
                 // Remove the alternate key if required
@@ -643,7 +642,7 @@ public class CliCommandBuilder implements CommandBuilder {
         if (cliArgument.altKey != null) {
             cliArgs.remove(cliArgument.altKey);
         }
-        cliArgs.set(Arguments.parse(cliArgument.key));
+        cliArgs.set(Argument.parse(cliArgument.key));
         return this;
     }
 

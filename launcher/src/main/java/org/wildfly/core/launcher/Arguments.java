@@ -50,14 +50,14 @@ class Arguments {
     }
 
     /**
-     * {@link #parse(String) Parses} the argument and adds it to the collection of arguments ignoring {@code null}
+     * {@link Argument#parse(String) Parses} the argument and adds it to the collection of arguments ignoring {@code null}
      * arguments.
      *
      * @param arg the argument to add
      */
     public void add(final String arg) {
         if (arg != null) {
-            final Argument argument = parse(arg);
+            final Argument argument = Argument.parse(arg);
             add(argument);
         }
     }
@@ -75,17 +75,9 @@ class Arguments {
         if (key != null) {
             final Argument argument;
             if (key.startsWith("-D")) {
-                if (value == null) {
-                    argument = createSystemProperty(key);
-                } else {
-                    argument = createSystemProperty(key, value);
-                }
+                argument = Argument.createSystemProperty(key, value);
             } else {
-                if (value == null) {
-                    argument = create(key);
-                } else {
-                    argument = create(key, value);
-                }
+                argument = Argument.create(key, value);
             }
             add(argument);
         }
@@ -108,9 +100,9 @@ class Arguments {
             } else {
                 final Argument argument;
                 if (key.startsWith("-D")) {
-                    argument = createSystemProperty(key, value);
+                    argument = Argument.createSystemProperty(key, value);
                 } else {
-                    argument = create(key, value);
+                    argument = Argument.create(key, value);
                 }
                 set(argument);
             }
@@ -166,7 +158,7 @@ class Arguments {
      *
      * @return the value or an empty collection if no values were set
      */
-    public Collection<Argument> getArguments(final String key) {
+    Collection<Argument> getArguments(final String key) {
         final Collection<Argument> args = map.get(key);
         if (args != null) {
             return new ArrayList<>(args);
@@ -220,162 +212,5 @@ class Arguments {
         }
     }
 
-    /**
-     * Attempts to parse the argument into a key value pair. The separator is assumed to be {@code =}. If the value
-     * starts with a {@code -D} it's assumed to be a system property.
-     * <p/>
-     * If the argument is not a traditional key/value pair separated by an {@code =} the arguments key will be the full
-     * argument passed in and the arguments value will be {@code null}.
-     *
-     * @param arg the argument to parse
-     *
-     * @return the parsed argument
-     */
-    public static Argument parse(final String arg) {
-        if (arg.startsWith("-D")) {
-            final String key;
-            final String value;
-            // Check for an =
-            final int index = arg.indexOf('=');
-            if (index == -1) {
-                key = arg.substring(2);
-                value = null;
-            } else {
-                key = arg.substring(2, index);
-                if (arg.length() < (index + 1)) {
-                    value = null;
-                } else {
-                    value = arg.substring(index + 1);
-                }
-            }
-            return new SystemPropertyArgument(key, value);
-        }
-        final String key;
-        final String value;
-        // Check for an =
-        final int index = arg.indexOf('=');
-        if (index == -1) {
-            key = arg;
-            value = null;
-        } else {
-            key = arg.substring(0, index);
-            if (arg.length() < (index + 1)) {
-                value = null;
-            } else {
-                value = arg.substring(index + 1);
-            }
-        }
-        return new DefaultArgument(key, value);
-    }
 
-    private static Argument create(final String arg) {
-        return new DefaultArgument(arg, null);
-    }
-
-    private static Argument create(final String key, final String value) {
-        return new DefaultArgument(key, value);
-    }
-
-    private static Argument createSystemProperty(final String arg) {
-        return new SystemPropertyArgument(arg, null);
-    }
-
-    private static Argument createSystemProperty(final String key, final String value) {
-        return new SystemPropertyArgument(key, value);
-    }
-
-    /**
-     * Represents a command line argument in a possible key/value pair.
-     */
-    public abstract static class Argument {
-        private final String key;
-        private final String value;
-
-        protected Argument(final String key, final String value) {
-            this.key = key;
-            this.value = value;
-        }
-
-        /**
-         * They key to the command line argument which may be the full argument.
-         *
-         * @return the key
-         */
-        public String getKey() {
-            return key;
-        }
-
-        /**
-         * The optional value for the command line argument.
-         *
-         * @return the value or {@code null}
-         */
-        public String getValue() {
-            return value;
-        }
-
-        /**
-         * Indicates whether or not multiple values are allowed for the argument. In the case of system properties only
-         * one value should be set for the property.
-         *
-         * @return {@code true} if multiple values should be allowed for an argument, otherwise {@code false}
-         */
-        public boolean multipleValuesAllowed() {
-            return true;
-        }
-
-        /**
-         * The argument formatted for the command line.
-         *
-         * @return the command line argument
-         */
-        public abstract String asCommandLineArgument();
-
-        @Override
-        public String toString() {
-            return asCommandLineArgument();
-        }
-    }
-
-
-    private static final class SystemPropertyArgument extends Argument {
-        private final String cliArg;
-
-        public SystemPropertyArgument(final String key, final String value) {
-            super(key, value);
-            if (value != null) {
-                cliArg = "-D" + key + "=" + value;
-            } else {
-                cliArg = "-D" + key;
-            }
-        }
-
-        @Override
-        public boolean multipleValuesAllowed() {
-            return false;
-        }
-
-        @Override
-        public String asCommandLineArgument() {
-            return cliArg;
-        }
-    }
-
-    private static final class DefaultArgument extends Argument {
-        private final String cliArg;
-
-        public DefaultArgument(final String key, final String value) {
-            super(key, value);
-            if (value != null) {
-                cliArg = key + "=" + value;
-            } else {
-                cliArg = key;
-            }
-        }
-
-        @Override
-        public String asCommandLineArgument() {
-            return cliArg;
-        }
-    }
 }

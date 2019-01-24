@@ -23,10 +23,22 @@ package org.wildfly.core.launcher;
  * @author <a href="mailto:jperkins@redhat.com">James R. Perkins</a>
  */
 public class DomainEntry extends AbstractEntry {
+    private final Environment environment;
+
+    DomainEntry(final Environment environment, final Configuration configuration) {
+        super(configuration);
+        this.environment = environment;
+    }
+
+    public static void main(final String[] args) throws Exception {
+        // TODO (jrp) we need to process the arguments and print some help/error messages
+        final Environment environment = Environment.determine();
+        new DomainEntry(environment, Configuration.of(environment.resolvePath("bin", "domain.properties"))).monitor(args);
+    }
 
     @Override
-    CommandBuilder configure(final String[] args) {
-        final DomainCommandBuilder commandBuilder = DomainCommandBuilder.of(Environment.determine())
+    AbstractCommandBuilder<?> createCommandBuilder(final String[] args) {
+        final DomainCommandBuilder commandBuilder = DomainCommandBuilder.of(environment)
                 .addProcessControllerJavaOption("-D[Process Controller]");
 
         for (String arg : args) {
@@ -37,8 +49,8 @@ public class DomainEntry extends AbstractEntry {
             }
         }
         // Add the PROCESS_CONTROLLER_JAVA_OPTS and HOST_CONTROLLER_JAVA_OPTS environment variables
-        commandBuilder.addProcessControllerJavaOptions(getJavaOpts("PROCESS_CONTROLLER_JAVA_OPTS"))
-                .addHostControllerJavaOptions(getJavaOpts("HOST_CONTROLLER_JAVA_OPTS"));
+        commandBuilder.addProcessControllerJavaOptions(getenv("PROCESS_CONTROLLER_JAVA_OPTS"))
+                .addHostControllerJavaOptions(getenv("HOST_CONTROLLER_JAVA_OPTS"));
         return commandBuilder;
     }
 }

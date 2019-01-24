@@ -32,7 +32,6 @@ import java.util.List;
 
 import org.junit.Assert;
 import org.junit.Test;
-import org.wildfly.core.launcher.Arguments.Argument;
 
 /**
  * @author <a href="mailto:jperkins@redhat.com">James R. Perkins</a>

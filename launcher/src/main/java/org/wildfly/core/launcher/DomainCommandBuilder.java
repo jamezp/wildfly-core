@@ -26,8 +26,6 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.wildfly.core.launcher.Arguments.Argument;
-
 /**
  * Builds a list of commands used to launch a domain instance of WildFly.
  * <p/>
@@ -39,7 +37,7 @@ import org.wildfly.core.launcher.Arguments.Argument;
  *
  * @author <a href="mailto:jperkins@redhat.com">James R. Perkins</a>
  */
-@SuppressWarnings("unused")
+@SuppressWarnings({"unused", "UnusedReturnValue", "WeakerAccess"})
 public class DomainCommandBuilder extends AbstractCommandBuilder<DomainCommandBuilder> implements CommandBuilder {
 
     private static final String DOMAIN_BASE_DIR = "jboss.domain.base.dir";
@@ -73,9 +71,9 @@ public class DomainCommandBuilder extends AbstractCommandBuilder<DomainCommandBu
     private DomainCommandBuilder(final Environment environment) {
         super(environment);
         hostControllerJavaOpts = new Arguments();
-        hostControllerJavaOpts.addAll(environment.getJavaOptions());
+        hostControllerJavaOpts.addAll(DEFAULT_VM_ARGUMENTS);
         processControllerJavaOpts = new Arguments();
-        processControllerJavaOpts.addAll(environment.getJavaOptions());
+        processControllerJavaOpts.addAll(DEFAULT_VM_ARGUMENTS);
     }
 
     /**
@@ -501,7 +499,7 @@ public class DomainCommandBuilder extends AbstractCommandBuilder<DomainCommandBu
      */
     public DomainCommandBuilder addHostControllerJavaOption(final String arg) {
         if (arg != null && !arg.trim().isEmpty()) {
-            final Argument argument = Arguments.parse(arg);
+            final Argument argument = Argument.parse(arg);
             switch (argument.getKey()) {
                 case DOMAIN_BASE_DIR:
                     if (argument.getValue() != null) {
@@ -604,7 +602,7 @@ public class DomainCommandBuilder extends AbstractCommandBuilder<DomainCommandBu
      */
     public DomainCommandBuilder addProcessControllerJavaOption(final String arg) {
         if (arg != null && !arg.trim().isEmpty()) {
-            final Argument argument = Arguments.parse(arg);
+            final Argument argument = Argument.parse(arg);
             if (argument.getKey().equals(SECURITY_MANAGER_PROP)) {
                 setUseSecurityManager(true);
             } else {

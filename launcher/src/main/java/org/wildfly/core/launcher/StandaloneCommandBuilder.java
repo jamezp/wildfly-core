@@ -30,8 +30,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.wildfly.core.launcher.Arguments.Argument;
-
 /**
  * Builds a list of commands used to launch a standalone instance of WildFly.
  * <p/>
@@ -39,7 +37,7 @@ import org.wildfly.core.launcher.Arguments.Argument;
  *
  * @author <a href="mailto:jperkins@redhat.com">James R. Perkins</a>
  */
-@SuppressWarnings("unused")
+@SuppressWarnings({"unused", "WeakerAccess", "UnusedReturnValue"})
 public class StandaloneCommandBuilder extends AbstractCommandBuilder<StandaloneCommandBuilder> implements CommandBuilder {
 
     // JPDA remote socket debugging
@@ -65,7 +63,7 @@ public class StandaloneCommandBuilder extends AbstractCommandBuilder<StandaloneC
      * @param wildflyHome the path to WildFly
      */
     private StandaloneCommandBuilder(final Path wildflyHome) {
-        this(new Environment(wildflyHome));
+        this(new Environment(wildflyHome), true);
     }
 
     /**
@@ -73,10 +71,12 @@ public class StandaloneCommandBuilder extends AbstractCommandBuilder<StandaloneC
      *
      * @param environment the environment to use
      */
-    private StandaloneCommandBuilder(final Environment environment) {
+    private StandaloneCommandBuilder(final Environment environment, final boolean loadDefaultVmArgs) {
         super(environment);
         javaOpts = new Arguments();
-        javaOpts.addAll(environment.getJavaOptions());
+        if (loadDefaultVmArgs) {
+            javaOpts.addAll(DEFAULT_VM_ARGUMENTS);
+        }
         securityProperties = new LinkedHashMap<>();
     }
 
@@ -102,8 +102,8 @@ public class StandaloneCommandBuilder extends AbstractCommandBuilder<StandaloneC
         return new StandaloneCommandBuilder(validateWildFlyDir(wildflyHome));
     }
 
-    static StandaloneCommandBuilder of(final Environment environment) {
-        return new StandaloneCommandBuilder(environment);
+    static StandaloneCommandBuilder of(final Environment environment, final boolean loadDefaultVmARgs) {
+        return new StandaloneCommandBuilder(environment, loadDefaultVmARgs);
     }
 
     /**
@@ -115,7 +115,21 @@ public class StandaloneCommandBuilder extends AbstractCommandBuilder<StandaloneC
      */
     public StandaloneCommandBuilder addJavaOption(final String jvmArg) {
         if (jvmArg != null && !jvmArg.trim().isEmpty()) {
-            final Argument argument = Arguments.parse(jvmArg);
+            final Argument argument = Argument.parse(jvmArg);
+            addJavaOption(argument);
+        }
+        return this;
+    }
+
+    /**
+     * Adds a JVM argument to the command ignoring {@code null} arguments.
+     *
+     * @param argument the JVM argument to add
+     *
+     * @return the builder
+     */
+    StandaloneCommandBuilder addJavaOption(final Argument argument) {
+        if (argument != null) {
             switch (argument.getKey()) {
                 case SERVER_BASE_DIR:
                     if (argument.getValue() != null) {
@@ -418,7 +432,7 @@ public class StandaloneCommandBuilder extends AbstractCommandBuilder<StandaloneC
     }
 
     public StandaloneCommandBuilder setGitRepository(final String gitRepository, final String gitBranch, final String gitAuthentication) {
-        if(gitRepository == null) {
+        if (gitRepository == null) {
             throw MESSAGES.nullParam("git-repo");
         }
         addServerArg("--git-repo", gitRepository);

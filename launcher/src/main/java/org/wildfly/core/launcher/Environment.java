@@ -5,14 +5,14 @@
  * distribution for a full listing of individual contributors.
  *
  * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
+ * under the terms of the GNU Lesser General License as
  * published by the Free Software Foundation; either version 2.1 of
  * the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
+ * Lesser General License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this software; if not, write to the Free
@@ -36,6 +36,7 @@ import org.wildfly.core.launcher.logger.LauncherMessages;
 /**
  * @author <a href="mailto:jperkins@redhat.com">James R. Perkins</a>
  */
+@SuppressWarnings("UnusedReturnValue")
 class Environment {
     private static final String JAVA_EXE;
     private static final Path JAVA_HOME;
@@ -95,7 +96,7 @@ class Environment {
      *
      * @return the WildFly home directory
      */
-    public Path getWildflyHome() {
+    Path getWildflyHome() {
         return wildflyHome;
     }
 
@@ -104,7 +105,7 @@ class Environment {
      *
      * @return the path to {@code jboss-modules.jar}
      */
-    public Path getModuleJar() {
+    Path getModuleJar() {
         return resolvePath(MODULES_JAR_NAME);
     }
 
@@ -115,7 +116,7 @@ class Environment {
      *
      * @throws java.lang.IllegalArgumentException if the path is {@code null}
      */
-    public Environment addModuleDir(final String moduleDir) {
+    Environment addModuleDir(final String moduleDir) {
         if (moduleDir == null) {
             throw LauncherMessages.MESSAGES.nullParam("moduleDir");
         }
@@ -132,7 +133,7 @@ class Environment {
      *
      * @throws java.lang.IllegalArgumentException if any of the module paths are invalid or {@code null}
      */
-    public Environment addModuleDirs(final String... moduleDirs) {
+    Environment addModuleDirs(final String... moduleDirs) {
         // Validate and add each path
         for (String path : moduleDirs) {
             addModuleDir(path);
@@ -147,7 +148,7 @@ class Environment {
      *
      * @throws java.lang.IllegalArgumentException if any of the module paths are invalid or {@code null}
      */
-    public Environment addModuleDirs(final Iterable<String> moduleDirs) {
+    Environment addModuleDirs(final Iterable<String> moduleDirs) {
         // Validate and add each path
         for (String path : moduleDirs) {
             addModuleDir(path);
@@ -164,7 +165,7 @@ class Environment {
      *
      * @throws java.lang.IllegalArgumentException if any of the module paths are invalid or {@code null}
      */
-    public Environment setModuleDirs(final Iterable<String> moduleDirs) {
+    Environment setModuleDirs(final Iterable<String> moduleDirs) {
         this.modulesDirs.clear();
         // Process each module directory
         for (String path : moduleDirs) {
@@ -183,7 +184,7 @@ class Environment {
      *
      * @throws java.lang.IllegalArgumentException if any of the module paths are invalid or {@code null}
      */
-    public Environment setModuleDirs(final String... moduleDirs) {
+    Environment setModuleDirs(final String... moduleDirs) {
         this.modulesDirs.clear();
         // Process each module directory
         for (String path : moduleDirs) {
@@ -198,7 +199,7 @@ class Environment {
      *
      * @return the paths separated by the {@link File#pathSeparator path separator}
      */
-    public String getModulePaths() {
+    String getModulePaths() {
         final StringBuilder result = new StringBuilder();
         if (addDefaultModuleDir) {
             result.append(wildflyHome.resolve("modules").toString());
@@ -220,7 +221,7 @@ class Environment {
      *
      * @param javaHome the Java home or {@code null} to use te system property {@code java.home}
      */
-    public Environment setJavaHome(final String javaHome) {
+    Environment setJavaHome(final String javaHome) {
         if (javaHome == null) {
             this.javaHome = null;
         } else {
@@ -234,7 +235,7 @@ class Environment {
      *
      * @param javaHome the Java home or {@code null} to use te system property {@code java.home}
      */
-    public Environment setJavaHome(final Path javaHome) {
+    Environment setJavaHome(final Path javaHome) {
         if (javaHome == null) {
             this.javaHome = null;
         } else {
@@ -250,7 +251,7 @@ class Environment {
      *
      * @return the path to the Java home directory
      */
-    public Path getJavaHome() {
+    Path getJavaHome() {
         final Path path;
         if (javaHome == null) {
             path = JAVA_HOME;
@@ -265,7 +266,7 @@ class Environment {
      *
      * @return the java command to use
      */
-    public String getJavaCommand() {
+    String getJavaCommand() {
         return getJavaCommand(javaHome);
     }
 
@@ -276,7 +277,7 @@ class Environment {
      *
      * @return the java command to use
      */
-    public String getJavaCommand(final Path javaHome) {
+    String getJavaCommand(final Path javaHome) {
         final Path dir;
         if (javaHome == null) {
             dir = getJavaHome();
@@ -305,7 +306,7 @@ class Environment {
      *
      * @return the path
      */
-    public Path resolvePath(final String... paths) {
+    Path resolvePath(final String... paths) {
         Path result = wildflyHome;
         for (String path : paths) {
             result = result.resolve(path);
@@ -319,10 +320,6 @@ class Environment {
 
     boolean isWindows() {
         return WINDOWS;
-    }
-
-    public static boolean supportsMaxPermSize() {
-        return false;
     }
 
     static Path getDefaultJavaHome() {

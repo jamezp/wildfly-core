@@ -21,37 +21,30 @@ package org.wildfly.core.launcher;
 
 import java.io.IOException;
 import java.io.PrintStream;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
 /**
  * @author <a href="mailto:jperkins@redhat.com">James R. Perkins</a>
  */
-public abstract class AbstractEntry {
+abstract class AbstractEntry {
     private static final PrintStream stdout = System.out;
+    /*
+     * TODO (jrp) Known environment variables that need to be checked:
+     * - SECMGR
+     * - GC_LOG
+     *
+     */
+    final Configuration configuration;
 
-    public static void main(final String[] args) throws Exception {
-        String[] serverArgs;
-        final AbstractEntry ep;
-        if (args == null || args.length == 0) {
-            ep = new StandaloneEntry();
-            serverArgs = args;
-        } else {
-            // First argument should indicate the type
-            if ("--domain".equals(args[0])) {
-                ep = new DomainEntry();
-            } else {
-                ep = new StandaloneEntry();
-            }
-            serverArgs = Arrays.copyOfRange(args, 1, args.length);
-        }
-        ep.launch(serverArgs);
+    protected AbstractEntry(final Configuration configuration) {
+        this.configuration = configuration;
     }
 
-    abstract CommandBuilder configure(String[] args);
+    abstract AbstractCommandBuilder<?> createCommandBuilder(String[] args);
 
-    static String[] getJavaOpts(final String key) {
+    static String[] getenv(final String key) {
+        // TODO (jrp) this needs to be a real parser, not just split on whitespace characters
         final String value = SecurityActions.getenv(key);
         if (value == null) {
             return new String[0];
@@ -59,19 +52,34 @@ public abstract class AbstractEntry {
         return value.split("\\s+");
     }
 
-    private void launch(final String[] args) throws IOException, InterruptedException {
-        final AbstractCommandBuilder<?> commandBuilder = (AbstractCommandBuilder<?>) configure(args);
+    Process launch(final String[] args) throws IOException {
+        final AbstractCommandBuilder<?> commandBuilder = createCommandBuilder(args);
         printWelcome(commandBuilder);
         final Launcher launcher = Launcher.of(commandBuilder)
                 .inherit();
-        final Process process = launcher.launch();
-        int status = process.waitFor();
+        launcher.addEnvironmentVariables(configuration.get("env"));
+        return launcher.launch();
+    }
+
+    void monitor(final String[] args) throws IOException, InterruptedException {
+        final Process process = launch(args);
+        final int status = process.waitFor();
         if (status == 10) {
-            launch(args);
+            monitor(args);
+        } else {
+            System.exit(status);
         }
     }
 
-    private void printWelcome(final AbstractCommandBuilder commandBuilder) {
+    static void print(final String message) {
+        stdout.println(message);
+    }
+
+    static void print(final String fmt, final Object... args) {
+        stdout.printf(fmt, args);
+    }
+
+    static void printWelcome(final AbstractCommandBuilder<?> commandBuilder) {
         stdout.println("=========================================================================");
         stdout.println();
         stdout.println("  JBoss Bootstrap Environment");

@@ -27,15 +27,15 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 
-import org.wildfly.core.launcher.Arguments.Argument;
 import org.wildfly.core.launcher.logger.LauncherMessages;
 
 /**
  * @author <a href="mailto:jperkins@redhat.com">James R. Perkins</a>
  */
-@SuppressWarnings("unused")
+@SuppressWarnings({"unused", "WeakerAccess", "UnusedReturnValue", "SameParameterValue"})
 abstract class AbstractCommandBuilder<T extends AbstractCommandBuilder<T>> implements CommandBuilder {
 
     static final String HOME_DIR = Environment.HOME_DIR;
@@ -52,7 +52,7 @@ abstract class AbstractCommandBuilder<T extends AbstractCommandBuilder<T>> imple
         javaOpts.add("-Djava.net.preferIPv4Stack=true");
         javaOpts.add("-Djava.awt.headless=true");
         javaOpts.add("-Djboss.modules.system.pkgs=org.jboss.byteman");
-        DEFAULT_VM_ARGUMENTS = javaOpts.toArray(new String[javaOpts.size()]);
+        DEFAULT_VM_ARGUMENTS = javaOpts.toArray(new String[0]);
 
         // Default JVM parameters for all modular JDKs
         final ArrayList<String> modularJavaOpts = new ArrayList<>();
@@ -297,7 +297,7 @@ abstract class AbstractCommandBuilder<T extends AbstractCommandBuilder<T>> imple
      */
     public T addServerArgument(final String arg) {
         if (arg != null) {
-            final Argument argument = Arguments.parse(arg);
+            final Argument argument = Argument.parse(arg);
             if (addServerArgument(argument)) {
                 if (SECURITY_MANAGER_ARG.equals(arg)) {
                     setUseSecurityManager(true);
