@@ -1,0 +1,67 @@
+= WildFly Event Logging
+
+The WildFly Event Logging API offers a simple API for logging audit and access events. Audit logging is generally used
+for things like management changes or security audit logging. Access logging is generally used for things like web
+access or EJB access.
+
+== EventLogger
+
+The `EventLogger` is used to log events. Events are said to be a map of keys and values. The event source is used as a
+way to differentiate events logged. This is useful for log aggregation filters to differentiate types of log messages.
+
+There's an option to use a logger which writes immediately to the `EventWriter` associated with the logger. You can
+optionally create an asynchronous logger which will format and log the events in a new thread.
+
+== JsonEventFormatter
+
+The `JsonEventFormatter` simply converts the logged event data to JSON format.
+
+== StdoutEventWriter
+
+The `StdoutEventWriter` writes the formatted data to `stdout`.
+
+
+== Examples
+
+=== Synchronous Logger
+
+[source,java]
+----
+final EventLogger logger = EventLogger.createLogger("my-event");
+final Map<String, Object> event = new LinkedHashMap<>();
+event.put("remoteHost", "127.0.0.1");
+event.put("requestLine", "GET / HTTP/1.1");
+event.put("responseCode", "200");
+
+logger.log(event);
+----
+
+=== Asynchronous Logger
+
+[source,java]
+----
+final EventLogger logger = EventLogger.createAsyncLogger("my-event", executor);
+final Supplier<Map<String, Object>> eventSupplier = () -> {
+final Map<String, Object> event = new LinkedHashMap<>();
+event.put("remoteHost", "127.0.0.1");
+event.put("requestLine", "GET / HTTP/1.1");
+event.put("responseCode", "200");
+};
+
+logger.log(eventSupplier);
+----
+
+=== Example JSON Output
+
+[source,json]
+----
+{
+    "eventSource":"my-event",
+    "timestamp":"2019-03-07T10:43:07.068-08:00",
+    "remoteHost":"127.0.0.1",
+    "requestLine":"GET / HTTP/1.1",
+    "responseCode":"200"
+}
+----
+
+NOTE: This JSON will not be formatted like this on the output. It's formatted here for readability only.
