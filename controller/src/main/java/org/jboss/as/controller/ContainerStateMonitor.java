@@ -158,7 +158,7 @@ final class ContainerStateMonitor {
      *         services and no newly corrected services
      */
     private synchronized ContainerStateChangeReport createContainerStateChangeReport(boolean resetHistory) {
-
+        ROOT_LOGGER.warnf("******** Problems: %s", problems);
         final Map<ServiceName, Set<ServiceName>> missingDeps;
         if (problems.isEmpty()) {
             missingDeps = Collections.emptyMap();
@@ -178,6 +178,7 @@ final class ContainerStateMonitor {
             }
         }
 
+        ROOT_LOGGER.warnf("******** previousMissingDepSet: %s", previousFailedSet);
         final Set<ServiceName> previousMissing = previousMissingDepSet;
 
         // no longer missing deps...
@@ -205,6 +206,9 @@ final class ContainerStateMonitor {
                 if (!previousMissing.contains(name)) {
                     ServiceController<?> controller = serviceRegistry.getService(name);
                     boolean unavailable = controller != null && controller.getMode() != ServiceController.Mode.NEVER;
+                    ROOT_LOGGER.warnf("******** unavailableDependencies: %s", controller.getUnavailableDependencies());
+                    ROOT_LOGGER.warnf("******** value: %s", controller.getValue());
+                    ROOT_LOGGER.warnf("******** StartException: %s", controller.getStartException());
                     missingServices.put(name, new MissingDependencyInfo(name, unavailable, entry.getValue()));
                 }
             }

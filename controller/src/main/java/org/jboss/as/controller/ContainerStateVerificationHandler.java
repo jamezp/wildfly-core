@@ -16,6 +16,7 @@ limitations under the License.
 
 package org.jboss.as.controller;
 
+import org.jboss.as.controller.logging.ControllerLogger;
 import org.jboss.dmr.ModelNode;
 
 /**
@@ -44,6 +45,7 @@ final class ContainerStateVerificationHandler implements OperationStepHandler {
         // against a different response object that is invisible to us at this point,
         // hence the use of the FAILURE_REPORTED_ATTACHMENT)
         if (!context.hasFailureDescription() && context.getAttachment(FAILURE_REPORTED_ATTACHMENT) == null) {
+            ControllerLogger.ROOT_LOGGER.warnf("********* FAILURE: %s", context.getResult());
             throw new OperationFailedException(ContainerStateMonitor.createChangeReportLogMessage(changeReport, true));
         }
     }
