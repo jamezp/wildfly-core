@@ -23,6 +23,7 @@
 package org.jboss.as.logging;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
@@ -66,6 +67,11 @@ import org.jboss.logmanager.config.LogContextConfiguration;
  * @author <a href="mailto:jperkins@redhat.com">James R. Perkins</a>
  */
 class LoggingSubsystemAdd extends AbstractAddStepHandler {
+
+    private static final List<String> ARTEMIS_CATEGORIES = Arrays.asList(
+            "org.apache.activemq.audit.base",
+            "org.apache.activemq.audit.management"
+    );
 
     private final PathManager pathManager;
     private final WildFlyLogContextSelector contextSelector;
@@ -120,10 +126,19 @@ class LoggingSubsystemAdd extends AbstractAddStepHandler {
             final List<String> configuredLoggerNames = logContextConfiguration.getLoggerNames();
             // Always remove the root
             configuredLoggerNames.remove(CommonAttributes.ROOT_LOGGER_NAME);
+            // Remove the artemis logger categories we want configured at all times
+            configuredLoggerNames.removeAll(ARTEMIS_CATEGORIES);
             configuredLoggerNames.removeAll(loggerNames);
             for (String name : configuredLoggerNames) {
                 LoggingLogger.ROOT_LOGGER.tracef("Removing logger configuration for '%s'", name);
                 logContextConfiguration.removeLoggerConfiguration(name);
+            }
+        }
+
+        // Add the artemis loggers we want configured by default
+        for (String name : ARTEMIS_CATEGORIES) {
+            if (!logContextConfiguration.getLoggerNames().contains(name)) {
+                logContextConfiguration.addLoggerConfiguration(name).setLevel("OFF");
             }
         }
 
