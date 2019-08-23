@@ -36,6 +36,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.Permission;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
 import javax.inject.Inject;
@@ -332,5 +333,14 @@ public abstract class AbstractLoggingTestCase {
             }
         }
         Assert.assertEquals(String.format("Message '%s' found in %s", msg, file), expected, logFound);
+    }
+
+    protected static <T> T[] join(final T[] a, final T... b) {
+        if (b.length == 0) {
+            return a;
+        }
+        final T[] result = Arrays.copyOf(a, a.length + b.length);
+        System.arraycopy(b, 0, result, a.length, b.length);
+        return result;
     }
 }
