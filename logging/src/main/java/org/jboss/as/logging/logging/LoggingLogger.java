@@ -1029,4 +1029,15 @@ public interface LoggingLogger extends BasicLogger {
      */
     @Message(id = 98, value = "Cannot remove filter %s as it's assigned to: %s")
     OperationFailedException cannotRemoveFilter(String name, Collection<String> references);
+
+    /**
+     * Creates an exception indicating the class loader is already registered with a log context.
+     *
+     * @param classLoader the class loader that is already registered
+     *
+     * @return an {@link IllegalArgumentException} for the error
+     */
+    @Message(id = 99, value = "ClassLoader instance is already registered to a log context (%s)")
+    IllegalArgumentException classLoaderAlreadyRegistered(ClassLoader classLoader);
+
 }

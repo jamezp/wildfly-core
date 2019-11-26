@@ -22,16 +22,19 @@
 
 package org.jboss.as.logging.logmanager;
 
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.HashMap;
+import java.util.Map;
 
+import org.jboss.as.logging.logging.LoggingLogger;
 import org.jboss.logmanager.ClassLoaderLogContextSelector;
 import org.jboss.logmanager.LogContext;
 import org.jboss.logmanager.LogContextSelector;
 import org.jboss.logmanager.ThreadLocalLogContextSelector;
+import org.jboss.modules.ModuleClassLoader;
 
 /**
-* @author <a href="mailto:jperkins@redhat.com">James R. Perkins</a>
-*/
+ * @author <a href="mailto:jperkins@redhat.com">James R. Perkins</a>
+ */
 class WildFlyLogContextSelectorImpl implements WildFlyLogContextSelector {
 
     private final LogContextSelector defaultLogContextSelector;
@@ -39,7 +42,7 @@ class WildFlyLogContextSelectorImpl implements WildFlyLogContextSelector {
 
     private final ThreadLocalLogContextSelector threadLocalContextSelector;
 
-    private final AtomicInteger counter;
+    private final Map<ClassLoader, ValueHolder> registered;
 
     WildFlyLogContextSelectorImpl(final LogContext defaultLogContext) {
         this(new ClassLoaderLogContextSelector(new LogContextSelector() {
@@ -62,9 +65,9 @@ class WildFlyLogContextSelectorImpl implements WildFlyLogContextSelector {
             dft = defaultLogContextSelector;
         }
         this.defaultLogContextSelector = dft;
-        counter = new AtomicInteger(0);
         contextSelector = new ClassLoaderLogContextSelector(dft, true);
         threadLocalContextSelector = new ThreadLocalLogContextSelector(contextSelector);
+        registered = new HashMap<>();
     }
 
     @Override
@@ -79,17 +82,40 @@ class WildFlyLogContextSelectorImpl implements WildFlyLogContextSelector {
 
     @Override
     public void registerLogContext(final ClassLoader classLoader, final LogContext logContext) {
-        contextSelector.registerLogContext(classLoader, logContext);
-        counter.incrementAndGet();
+        synchronized (registered) {
+            ValueHolder value = registered.get(classLoader);
+            if (value == null) {
+                value = new ValueHolder(logContext);
+                final ValueHolder appearing = registered.putIfAbsent(classLoader, value);
+                if (appearing == null) {
+                    contextSelector.registerLogContext(classLoader, logContext);
+                }
+            } else {
+                if (!value.logContext.equals(logContext)) {
+                    throw LoggingLogger.ROOT_LOGGER.classLoaderAlreadyRegistered(classLoader);
+                }
+            }
+            value.count++;
+        }
     }
 
     @Override
     public boolean unregisterLogContext(final ClassLoader classLoader, final LogContext logContext) {
-        if (contextSelector.unregisterLogContext(classLoader, logContext)) {
-            counter.decrementAndGet();
-            return true;
+        synchronized (registered) {
+            final ValueHolder value = registered.get(classLoader);
+            // Shouldn't be null, but we should check
+            if (value == null) {
+                return contextSelector.unregisterLogContext(classLoader, logContext);
+            }
+            // TODO (jrp) it would be nice to have a test which could ensure we end up with an empty map
+            if (--value.count == 0) {
+                registered.remove(classLoader);
+                // TODO (jrp) or change to a trace, definitely remove the casting
+                LoggingLogger.ROOT_LOGGER.warnf("Removed class loader %s from the registered class loaders.", ((ModuleClassLoader) classLoader).getModule().getName());
+                return contextSelector.unregisterLogContext(classLoader, logContext);
+            }
         }
-        return false;
+        return true; // TODO (jrp) is this correct? seems a bit odd
     }
 
     @Override
@@ -104,6 +130,16 @@ class WildFlyLogContextSelectorImpl implements WildFlyLogContextSelector {
 
     @Override
     public int registeredCount() {
-        return counter.get();
+        return registered.size();
+    }
+
+    private static class ValueHolder {
+        final LogContext logContext;
+        int count;
+
+        private ValueHolder(final LogContext logContext) {
+            this.logContext = logContext;
+            count = 0;
+        }
     }
 }

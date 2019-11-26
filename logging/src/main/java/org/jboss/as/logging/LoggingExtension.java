@@ -109,8 +109,10 @@ public class LoggingExtension implements Extension {
             "org.apache.commons.logging",
             "org.apache.log4j",
             "org.jboss.logging",
+            "org.jboss.logging.commons.logging",
             "org.jboss.logging.jul-to-slf4j-stub",
             "org.jboss.logmanager",
+            "org.jboss.log4j.logmanager",
             "org.slf4j",
             "org.slf4j.ext",
             "org.slf4j.impl",
@@ -204,6 +206,8 @@ public class LoggingExtension implements Extension {
 
         // Load logging API modules
         try {
+            // TODO (jrp) is this right?
+            contextSelector.addLogApiClassLoader(getClass().getClassLoader());
             final ModuleLoader moduleLoader = Module.forClass(LoggingExtension.class).getModuleLoader();
             for (String moduleName : LOGGING_API_MODULES) {
                 try {

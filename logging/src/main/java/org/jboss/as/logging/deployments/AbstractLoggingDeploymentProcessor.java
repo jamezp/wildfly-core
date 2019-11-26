@@ -37,9 +37,12 @@ import org.jboss.as.server.deployment.DeploymentUnit;
 import org.jboss.as.server.deployment.DeploymentUnitProcessingException;
 import org.jboss.as.server.deployment.DeploymentUnitProcessor;
 import org.jboss.as.server.deployment.SubDeploymentMarker;
+import org.jboss.as.server.deployment.module.ModuleDependency;
+import org.jboss.as.server.deployment.module.ModuleSpecification;
 import org.jboss.as.server.deployment.module.ResourceRoot;
 import org.jboss.logmanager.LogContext;
 import org.jboss.modules.Module;
+import org.jboss.modules.ModuleLoadException;
 import org.wildfly.security.manager.WildFlySecurityManager;
 
 /**
@@ -59,6 +62,12 @@ abstract class AbstractLoggingDeploymentProcessor implements DeploymentUnitProce
     @Override
     public final void deploy(final DeploymentPhaseContext phaseContext) throws DeploymentUnitProcessingException {
         final DeploymentUnit deploymentUnit = phaseContext.getDeploymentUnit();
+        try {
+            registerModuleClassLoaders(deploymentUnit);
+        } catch (ModuleLoadException e) {
+            // TODO (jrp) we need to decide what to do here
+            throw new DeploymentUnitProcessingException(e);
+        }
         // If the log context is already defined, skip the rest of the processing
         if (!hasRegisteredLogContext(deploymentUnit)) {
             if (deploymentUnit.hasAttachment(Attachments.DEPLOYMENT_ROOT)) {
@@ -89,6 +98,12 @@ abstract class AbstractLoggingDeploymentProcessor implements DeploymentUnitProce
         // nonexistent context.
         unregisterLogContext(context, DEFAULT_LOG_CONTEXT_KEY, module);
         unregisterLogContext(context, LOG_CONTEXT_KEY, module);
+        try {
+            unregisterModuleClassLoaders(context);
+        } catch (ModuleLoadException e) {
+            // TODO (jrp) we need to decide what to do here
+            throw new RuntimeException(e);
+        }
         // Unregister all sub-deployments
         final List<DeploymentUnit> subDeployments = getSubDeployments(context);
         for (DeploymentUnit subDeployment : subDeployments) {
@@ -151,6 +166,31 @@ abstract class AbstractLoggingDeploymentProcessor implements DeploymentUnitProce
                 LoggingLogger.ROOT_LOGGER.tracef("Removed LogContext '%s' from '%s'", logContext, module);
             } else {
                 LoggingLogger.ROOT_LOGGER.logContextNotRemoved(logContext, deploymentUnit.getName());
+            }
+        }
+    }
+
+    private void registerModuleClassLoaders(final DeploymentUnit deploymentUnit) throws ModuleLoadException {
+        // TODO (jrp) Global modules end up on the system dependencies. There are generally hundreds of these and it
+        // TODO (jrp) likely wouldn't be wise to load that many modules then add the class loaders to the log context
+        // TODO (jrp) selector registry.
+        if (deploymentUnit.hasAttachment(Attachments.MODULE_SPECIFICATION)) {
+            final ModuleSpecification moduleSpecification = deploymentUnit.getAttachment(Attachments.MODULE_SPECIFICATION);
+            for (ModuleDependency dep : moduleSpecification.getUserDependencies()) {
+                @SuppressWarnings("deprecation")
+                final ClassLoader cl = dep.getModuleLoader().loadModule(dep.getIdentifier()).getClassLoader();
+                logContextSelector.registerLogContext(cl, LogContext.getLogContext());
+            }
+        }
+    }
+
+    private void unregisterModuleClassLoaders(final DeploymentUnit deploymentUnit) throws ModuleLoadException {
+        if (deploymentUnit.hasAttachment(Attachments.MODULE_SPECIFICATION)) {
+            final ModuleSpecification moduleSpecification = deploymentUnit.getAttachment(Attachments.MODULE_SPECIFICATION);
+            for (ModuleDependency dep : moduleSpecification.getUserDependencies()) {
+                @SuppressWarnings("deprecation")
+                final ClassLoader cl = dep.getModuleLoader().loadModule(dep.getIdentifier()).getClassLoader();
+                logContextSelector.unregisterLogContext(cl, LogContext.getLogContext());
             }
         }
     }
