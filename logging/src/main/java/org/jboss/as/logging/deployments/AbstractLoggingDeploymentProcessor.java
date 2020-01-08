@@ -39,6 +39,7 @@ import org.jboss.as.server.deployment.DeploymentUnitProcessor;
 import org.jboss.as.server.deployment.SubDeploymentMarker;
 import org.jboss.as.server.deployment.module.ResourceRoot;
 import org.jboss.logmanager.LogContext;
+import org.jboss.logmanager.LogContextRouter;
 import org.jboss.modules.Module;
 import org.wildfly.security.manager.WildFlySecurityManager;
 
@@ -131,6 +132,10 @@ abstract class AbstractLoggingDeploymentProcessor implements DeploymentUnitProce
         }
         // Add the log context to the sub-deployment unit for later removal
         deploymentUnit.putAttachment(attachmentKey, logContext);
+        // TODO (jrp) we don't want to register the default log context, possibly we need a better way to test this
+        if (!logContext.equals(LogContext.getLogContext())) {
+            LogContextRouter.getInstance().register(module.getClassLoader(), logContext);
+        }
     }
 
     private void unregisterLogContext(final DeploymentUnit deploymentUnit, final AttachmentKey<LogContext> attachmentKey, final Module module) {
