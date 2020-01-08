@@ -218,6 +218,8 @@ public class LoggingConfigDeploymentProcessor extends AbstractLoggingDeploymentP
      */
     private LoggingConfigurationService configure(final ResourceRoot root, final VirtualFile configFile, final ClassLoader classLoader, final LogContext logContext) throws DeploymentUnitProcessingException {
         InputStream configStream = null;
+        // Set the context being configured as the local context
+        final LogContext old = logContextSelector.setLocalContext(logContext);
         try {
             LoggingLogger.ROOT_LOGGER.debugf("Found logging configuration file: %s", configFile);
 
@@ -228,7 +230,6 @@ public class LoggingConfigDeploymentProcessor extends AbstractLoggingDeploymentP
             // Check the type of the configuration file
             if (isLog4jConfiguration(fileName)) {
                 final ClassLoader current = WildFlySecurityManager.getCurrentContextClassLoaderPrivileged();
-                final LogContext old = logContextSelector.setLocalContext(logContext);
                 try {
                     WildFlySecurityManager.setCurrentContextClassLoaderPrivileged(classLoader);
                     if (LOG4J_XML.equals(fileName) || JBOSS_LOG4J_XML.equals(fileName)) {
@@ -239,7 +240,6 @@ public class LoggingConfigDeploymentProcessor extends AbstractLoggingDeploymentP
                         new org.apache.log4j.PropertyConfigurator().doConfigure(properties, org.apache.log4j.JBossLogManagerFacade.getLoggerRepository(logContext));
                     }
                 } finally {
-                    logContextSelector.setLocalContext(old);
                     WildFlySecurityManager.setCurrentContextClassLoaderPrivileged(current);
                 }
                 return new LoggingConfigurationService(null, resolveRelativePath(root, configFile));
@@ -260,6 +260,8 @@ public class LoggingConfigDeploymentProcessor extends AbstractLoggingDeploymentP
         } catch (Exception e) {
             throw LoggingLogger.ROOT_LOGGER.failedToConfigureLogging(e, configFile.getName());
         } finally {
+            // Reset to the old context which may be null
+            logContextSelector.setLocalContext(old);
             safeClose(configStream);
         }
         return null;

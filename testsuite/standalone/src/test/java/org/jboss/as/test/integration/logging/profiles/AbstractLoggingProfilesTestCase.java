@@ -91,8 +91,9 @@ abstract class AbstractLoggingProfilesTestCase extends AbstractLoggingTestCase {
             op.get("formatter").set("%d{HH:mm:ss,SSS} %-5p [%c] (%t) %s%E%n");
             builder.addStep(op);
 
-            op = Operations.createOperation("add-handler", createAddress("root-logger", "ROOT"));
-            op.get("name").set("LOGGING_TEST");
+            op = Operations.createAddOperation(createAddress("logger", "org.jboss.as.test.integration.logging"));
+            ModelNode handlers = op.get("handlers");
+            handlers.add("LOGGING_TEST");
             builder.addStep(op);
 
             // create dummy-profile1
@@ -101,7 +102,7 @@ abstract class AbstractLoggingProfilesTestCase extends AbstractLoggingTestCase {
             // add file handler
             op = Operations.createAddOperation(createAddress("logging-profile", "dummy-profile1", "periodic-rotating-file-handler", "DUMMY1"));
             op.get("level").set("ERROR");
-            op.get("append").set("true");
+            op.get("append").set(false);
             op.get("suffix").set(".yyyy-MM-dd");
             file = new ModelNode();
             file.get("relative-to").set("jboss.server.log.dir");
@@ -110,10 +111,10 @@ abstract class AbstractLoggingProfilesTestCase extends AbstractLoggingTestCase {
             op.get("formatter").set("%d{HH:mm:ss,SSS} %-5p [%c] (%t) %s%E%n");
             builder.addStep(op);
 
-            // add root logger
-            op = Operations.createAddOperation(createAddress("logging-profile", "dummy-profile1", "root-logger", "ROOT"));
+            // add org.jboss.as.test.integration.logging logger
+            op = Operations.createAddOperation(createAddress("logging-profile", "dummy-profile1", "logger", "org.jboss.as.test.integration.logging"));
             op.get("level").set("INFO");
-            ModelNode handlers = op.get("handlers");
+            handlers = op.get("handlers");
             handlers.add("DUMMY1");
             op.get("handlers").set(handlers);
             builder.addStep(op);
@@ -124,7 +125,7 @@ abstract class AbstractLoggingProfilesTestCase extends AbstractLoggingTestCase {
             // add file handler
             op = Operations.createAddOperation(createAddress("logging-profile", "dummy-profile2", "periodic-rotating-file-handler", "DUMMY2"));
             op.get("level").set("INFO");
-            op.get("append").set("true");
+            op.get("append").set(false);
             op.get("suffix").set(".yyyy-MM-dd");
             file = new ModelNode();
             file.get("relative-to").set("jboss.server.log.dir");
@@ -133,8 +134,8 @@ abstract class AbstractLoggingProfilesTestCase extends AbstractLoggingTestCase {
             op.get("formatter").set("%d{HH:mm:ss,SSS} %-5p [%c] (%t) %s%E%n");
             builder.addStep(op);
 
-            // add root logger
-            op = Operations.createAddOperation(createAddress("logging-profile", "dummy-profile2", "root-logger", "ROOT"));
+            // add org.jboss.as.test.integration.logging logger
+            op = Operations.createAddOperation(createAddress("logging-profile", "dummy-profile2", "logger", "org.jboss.as.test.integration.logging"));
             op.get("level").set("INFO");
             handlers = op.get("handlers");
             handlers.add("DUMMY2");
@@ -149,10 +150,8 @@ abstract class AbstractLoggingProfilesTestCase extends AbstractLoggingTestCase {
 
             final CompositeOperationBuilder builder = CompositeOperationBuilder.create();
 
-            // remove LOGGING_TEST from root-logger
-            ModelNode op = Operations.createOperation("remove-handler", createAddress("root-logger", "ROOT"));
-            op.get("name").set("LOGGING_TEST");
-            builder.addStep(op);
+            // remove LOGGING_TEST from org.jboss.as.test.integration.logging
+            builder.addStep(Operations.createRemoveOperation(createAddress("logger", "org.jboss.as.test.integration.logging")));
 
             // remove custom file handler
             builder.addStep(Operations.createRemoveOperation(createAddress("periodic-rotating-file-handler", "LOGGING_TEST")));

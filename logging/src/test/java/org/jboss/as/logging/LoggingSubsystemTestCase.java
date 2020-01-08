@@ -153,7 +153,7 @@ public class LoggingSubsystemTestCase extends AbstractLoggingSubsystemTest {
         // Test against current
         testEapFailedTransformers(controllerVersion, modelVersion, readResource("/expressions.xml"),
                 new FailedOperationTransformationConfig()
-                        .addFailedAttribute(SUBSYSTEM_ADDRESS, new NewAttributesConfig(LoggingResourceDefinition.USE_DEPLOYMENT_LOGGING_CONFIG))
+                        .addFailedAttribute(SUBSYSTEM_ADDRESS, new NewAttributesConfig(LoggingResourceDefinition.ALLOW_LOG_ROUTING, LoggingResourceDefinition.USE_DEPLOYMENT_LOGGING_CONFIG))
                         .addFailedAttribute(SUBSYSTEM_ADDRESS.append("console-handler"),
                                 new RejectExpressionsConfig(ConsoleHandlerResourceDefinition.TARGET))
                         .addFailedAttribute(loggingProfileAddress.append("console-handler"),
@@ -189,6 +189,7 @@ public class LoggingSubsystemTestCase extends AbstractLoggingSubsystemTest {
         // Test against current
         testEap7FailedTransformers(controllerVersion, modelVersion, readResource("/expressions.xml"),
                 new FailedOperationTransformationConfig()
+                        .addFailedAttribute(SUBSYSTEM_ADDRESS, new NewAttributesConfig(LoggingResourceDefinition.ALLOW_LOG_ROUTING))
                         .addFailedAttribute(SUBSYSTEM_ADDRESS.append("json-formatter"),
                                 FailedOperationTransformationConfig.REJECTED_RESOURCE)
                         .addFailedAttribute(SUBSYSTEM_ADDRESS.append("xml-formatter"),
@@ -220,6 +221,7 @@ public class LoggingSubsystemTestCase extends AbstractLoggingSubsystemTest {
         // Test against current
         testEap7FailedTransformers(controllerVersion, modelVersion, readResource("/expressions.xml"),
                 new FailedOperationTransformationConfig()
+                        .addFailedAttribute(SUBSYSTEM_ADDRESS, new NewAttributesConfig(LoggingResourceDefinition.ALLOW_LOG_ROUTING))
                         .addFailedAttribute(SUBSYSTEM_ADDRESS.append("syslog-handler"),
                                 new NewAttributesConfig(SyslogHandlerResourceDefinition.NAMED_FORMATTER))
                         .addFailedAttribute(SUBSYSTEM_ADDRESS.append(CommonAttributes.LOGGING_PROFILE).append("syslog-handler"),

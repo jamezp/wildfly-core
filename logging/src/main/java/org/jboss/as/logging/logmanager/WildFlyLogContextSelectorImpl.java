@@ -23,8 +23,11 @@
 package org.jboss.as.logging.logmanager;
 
 import org.jboss.logmanager.ClassLoaderLogContextSelector;
+import org.jboss.logmanager.ContextClassLoaderLogContextSelector;
 import org.jboss.logmanager.LogContext;
 import org.jboss.logmanager.LogContextSelector;
+import org.jboss.logmanager.Logger;
+import org.jboss.logmanager.LoggerRouter;
 
 /**
  * @author <a href="mailto:jperkins@redhat.com">James R. Perkins</a>
@@ -32,17 +35,18 @@ import org.jboss.logmanager.LogContextSelector;
 class WildFlyLogContextSelectorImpl implements WildFlyLogContextSelector {
 
     private final LogContextSelector defaultLogContextSelector;
-    private final ClassLoaderLogContextSelector contextSelector;
+    private final ClassLoaderLogContextSelector clSelector;
+    private final ContextClassLoaderLogContextSelector tcclSelector;
 
     private final ThreadLocal<LogContext> localContext = new ThreadLocal<>();
     private int counter;
     private int dftCounter;
 
-    WildFlyLogContextSelectorImpl(final LogContext defaultLogContext) {
-        this(() -> defaultLogContext);
+    WildFlyLogContextSelectorImpl(final LogContext defaultLogContext, final boolean useLogRouting) {
+        this(() -> defaultLogContext, useLogRouting);
     }
 
-    WildFlyLogContextSelectorImpl(final LogContextSelector defaultLogContextSelector) {
+    WildFlyLogContextSelectorImpl(final LogContextSelector defaultLogContextSelector, final boolean useLogRouting) {
         // There is not a way to reset the LogContextSelector after a reload. If the current selector is already a
         // WildFlyLogContextSelectorImpl we should use the previous default selector. This avoids possibly wrapping the
         // same log context several times. It should also work with the embedded CLI selector as the commands handle
@@ -56,7 +60,21 @@ class WildFlyLogContextSelectorImpl implements WildFlyLogContextSelector {
         this.defaultLogContextSelector = dft;
         counter = 0;
         dftCounter = 0;
-        contextSelector = new ClassLoaderLogContextSelector(dft, true);
+        if (useLogRouting) {
+            tcclSelector = new ContextClassLoaderLogContextSelector(defaultLogContextSelector);
+            clSelector = null;
+            // This needs to be set last since it delegates to this selector
+            Logger.setLoggerRouter(new LoggerRouter(defaultLogContextSelector.getLogContext()) {
+                @Override
+                public LogContext getLogContext() {
+                    return WildFlyLogContextSelectorImpl.this.getLogContext();
+                }
+            });
+        } else {
+            Logger.setLoggerRouter(null);
+            clSelector = new ClassLoaderLogContextSelector(defaultLogContextSelector, true);
+            tcclSelector = null;
+        }
     }
 
     @Override
@@ -72,7 +90,7 @@ class WildFlyLogContextSelectorImpl implements WildFlyLogContextSelector {
         // If we have no registered contexts we can just use the default selector. This should improve performance
         // in most cases as the call stack will not be walked. This does depend on the on what was used for the
         // default selector, however in most cases it should perform better.
-        return counter > 0 ? contextSelector.getLogContext() : defaultLogContextSelector.getLogContext();
+        return counter > 0 ? (tcclSelector == null ? clSelector.getLogContext() : tcclSelector.getLogContext()) : defaultLogContextSelector.getLogContext();
     }
 
     @Override
@@ -92,7 +110,12 @@ class WildFlyLogContextSelectorImpl implements WildFlyLogContextSelector {
     public void registerLogContext(final ClassLoader classLoader, final LogContext logContext) {
         // We want to register regardless of the current counter for cases when a different log context is registered
         // later.
-        contextSelector.registerLogContext(classLoader, logContext);
+        if (clSelector != null) {
+            clSelector.registerLogContext(classLoader, logContext);
+        }
+        if (tcclSelector != null) {
+            tcclSelector.registerLogContext(classLoader, logContext);
+        }
         synchronized (this) {
             if (counter > 0) {
                 counter++;
@@ -109,7 +132,14 @@ class WildFlyLogContextSelectorImpl implements WildFlyLogContextSelector {
 
     @Override
     public boolean unregisterLogContext(final ClassLoader classLoader, final LogContext logContext) {
-        if (contextSelector.unregisterLogContext(classLoader, logContext)) {
+        boolean removed = false;
+        if (clSelector != null) {
+            removed = clSelector.unregisterLogContext(classLoader, logContext);
+        }
+        if (tcclSelector != null) {
+            removed = tcclSelector.unregisterLogContext(classLoader, logContext);
+        }
+        if (removed) {
             synchronized (this) {
                 if (counter > 0) {
                     counter--;
@@ -119,19 +149,24 @@ class WildFlyLogContextSelectorImpl implements WildFlyLogContextSelector {
                     dftCounter--;
                 }
             }
-            return true;
+        }
+        return removed;
+    }
+
+    @Override
+    public boolean addLogApiClassLoader(final ClassLoader apiClassLoader) {
+        if (clSelector != null) {
+            return clSelector.addLogApiClassLoader(apiClassLoader);
         }
         return false;
     }
 
     @Override
-    public boolean addLogApiClassLoader(final ClassLoader apiClassLoader) {
-        return contextSelector.addLogApiClassLoader(apiClassLoader);
-    }
-
-    @Override
     public boolean removeLogApiClassLoader(final ClassLoader apiClassLoader) {
-        return contextSelector.removeLogApiClassLoader(apiClassLoader);
+        if (clSelector != null) {
+            return clSelector.removeLogApiClassLoader(apiClassLoader);
+        }
+        return false;
     }
 
     @Override
