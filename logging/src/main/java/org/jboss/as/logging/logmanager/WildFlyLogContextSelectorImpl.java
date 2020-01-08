@@ -24,30 +24,33 @@ package org.jboss.as.logging.logmanager;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.jboss.logmanager.ClassLoaderLogContextSelector;
+import org.jboss.logmanager.ContextClassLoaderLogContextSelector;
 import org.jboss.logmanager.LogContext;
 import org.jboss.logmanager.LogContextSelector;
+import org.jboss.logmanager.Logger;
+import org.jboss.logmanager.LoggerRouter;
 import org.jboss.logmanager.ThreadLocalLogContextSelector;
 
 /**
-* @author <a href="mailto:jperkins@redhat.com">James R. Perkins</a>
-*/
+ * @author <a href="mailto:jperkins@redhat.com">James R. Perkins</a>
+ */
 class WildFlyLogContextSelectorImpl implements WildFlyLogContextSelector {
 
     private final LogContextSelector defaultLogContextSelector;
-    private final ClassLoaderLogContextSelector contextSelector;
+    private final ContextClassLoaderLogContextSelector contextSelector;
 
     private final ThreadLocalLogContextSelector threadLocalContextSelector;
 
     private final AtomicInteger counter;
 
+    @SuppressWarnings("Convert2Lambda")
     WildFlyLogContextSelectorImpl(final LogContext defaultLogContext) {
-        this(new ClassLoaderLogContextSelector(new LogContextSelector() {
+        this(new LogContextSelector() {
             @Override
             public LogContext getLogContext() {
                 return defaultLogContext;
             }
-        }));
+        });
     }
 
     WildFlyLogContextSelectorImpl(final LogContextSelector defaultLogContextSelector) {
@@ -63,8 +66,14 @@ class WildFlyLogContextSelectorImpl implements WildFlyLogContextSelector {
         }
         this.defaultLogContextSelector = dft;
         counter = new AtomicInteger(0);
-        contextSelector = new ClassLoaderLogContextSelector(dft, true);
+        contextSelector = new ContextClassLoaderLogContextSelector(dft);
         threadLocalContextSelector = new ThreadLocalLogContextSelector(contextSelector);
+        Logger.setLoggerRouter(new LoggerRouter(defaultLogContextSelector.getLogContext()) {
+            @Override
+            public LogContext getLogContext() {
+                return WildFlyLogContextSelectorImpl.this.getLogContext();
+            }
+        });
     }
 
     @Override
@@ -94,12 +103,14 @@ class WildFlyLogContextSelectorImpl implements WildFlyLogContextSelector {
 
     @Override
     public boolean addLogApiClassLoader(final ClassLoader apiClassLoader) {
-        return contextSelector.addLogApiClassLoader(apiClassLoader);
+        //return contextSelector.addLogApiClassLoader(apiClassLoader);
+        return true;
     }
 
     @Override
     public boolean removeLogApiClassLoader(final ClassLoader apiClassLoader) {
-        return contextSelector.removeLogApiClassLoader(apiClassLoader);
+        // return contextSelector.removeLogApiClassLoader(apiClassLoader);
+        return true;
     }
 
     @Override
