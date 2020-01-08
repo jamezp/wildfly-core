@@ -116,10 +116,10 @@ public interface WildFlyLogContextSelector extends LogContextSelector {
          *
          * @return a new selector that wraps the current selector
          */
-        public static WildFlyLogContextSelector create() {
+        public static WildFlyLogContextSelector create(final boolean useLogRouting) {
             // Wrap the current LogContextSelector. This will be used as the default in the cases where this selector
             // does not find a log context.
-            return new WildFlyLogContextSelectorImpl(LogContext.getLogContextSelector());
+            return new WildFlyLogContextSelectorImpl(LogContext.getLogContextSelector(), useLogRouting);
         }
 
         /**
@@ -127,9 +127,9 @@ public interface WildFlyLogContextSelector extends LogContextSelector {
          *
          * @return a new selector
          */
-        public static WildFlyLogContextSelector createEmbedded() {
+        public static WildFlyLogContextSelector createEmbedded(final boolean useLogRouting) {
             clearLogContext();
-            return new WildFlyLogContextSelectorImpl(EMBEDDED_LOG_CONTEXT);
+            return new WildFlyLogContextSelectorImpl(EMBEDDED_LOG_CONTEXT, useLogRouting);
         }
 
         private static void clearLogContext() {

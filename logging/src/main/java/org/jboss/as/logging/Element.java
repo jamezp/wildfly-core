@@ -55,6 +55,7 @@ enum Element {
     ACCEPT(CommonAttributes.ACCEPT),
     ADD_LOGGING_API_DEPENDENCIES(LoggingResourceDefinition.ADD_LOGGING_API_DEPENDENCIES),
     ALL(CommonAttributes.ALL),
+    ALLOW_LOG_ROUTING(LoggingResourceDefinition.ALLOW_LOG_ROUTING),
     ANY(CommonAttributes.ANY),
     APP_NAME(SyslogHandlerResourceDefinition.APP_NAME),
     APPEND(CommonAttributes.APPEND),

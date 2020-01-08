@@ -22,6 +22,7 @@
 
 <subsystem xmlns="urn:jboss:domain:logging:9.0">
     <add-logging-api-dependencies value="false"/>
+    <allow-log-routing value="false"/>
     <use-deployment-logging-config value="false"/>
 
     <async-handler name="async">

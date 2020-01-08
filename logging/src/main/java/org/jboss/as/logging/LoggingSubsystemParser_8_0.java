@@ -33,6 +33,7 @@ import java.util.List;
 import java.util.Set;
 import javax.xml.stream.XMLStreamException;
 
+import org.jboss.as.controller.AttributeDefinition;
 import org.jboss.as.controller.PathAddress;
 import org.jboss.as.controller.operations.common.Util;
 import org.jboss.as.controller.parsing.ParseUtils;
@@ -70,17 +71,14 @@ class LoggingSubsystemParser_8_0 extends LoggingSubsystemParser_7_0 {
         boolean rootDefined = false;
         while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
             final Element element = Element.forName(reader.getLocalName());
+            // First check root subsystem attributes
+            if (LoggingResourceDefinition.ATTRIBUTES.contains(element.getDefinition())) {
+                final String value = ParseUtils.readStringAttributeElement(reader, Attribute.VALUE.getLocalName());
+                final AttributeDefinition def = element.getDefinition();
+                def.getParser().parseAndSetParameter(def, value, subsystemAddOp, reader);
+                continue;
+            }
             switch (element) {
-                case ADD_LOGGING_API_DEPENDENCIES: {
-                    final String value = ParseUtils.readStringAttributeElement(reader, Attribute.VALUE.getLocalName());
-                    LoggingResourceDefinition.ADD_LOGGING_API_DEPENDENCIES.parseAndSetParameter(value, subsystemAddOp, reader);
-                    break;
-                }
-                case USE_DEPLOYMENT_LOGGING_CONFIG: {
-                    final String value = ParseUtils.readStringAttributeElement(reader, Attribute.VALUE.getLocalName());
-                    LoggingResourceDefinition.USE_DEPLOYMENT_LOGGING_CONFIG.parseAndSetParameter(value, subsystemAddOp, reader);
-                    break;
-                }
                 case LOGGER: {
                     parseLoggerElement(reader, SUBSYSTEM_ADDRESS, loggerOperations, loggerNames);
                     break;

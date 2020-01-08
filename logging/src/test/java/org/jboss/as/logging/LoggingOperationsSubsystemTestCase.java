@@ -53,7 +53,6 @@ import org.jboss.as.model.test.ModelTestUtils;
 import org.jboss.as.subsystem.test.KernelServices;
 import org.jboss.as.subsystem.test.SubsystemOperations;
 import org.jboss.dmr.ModelNode;
-import org.jboss.logmanager.LogContext;
 import org.jboss.logmanager.Logger;
 import org.junit.After;
 import org.junit.Before;
@@ -125,43 +124,57 @@ public class LoggingOperationsSubsystemTestCase extends AbstractLoggingSubsystem
     @Test
     public void testChangeRootLogLevel() throws Exception {
         testChangeRootLogLevel(null);
-        testChangeRootLogLevel(PROFILE);
+        try (TestLoggingProfileLoggerRouter ignored = TestLoggingProfileLoggerRouter.create(PROFILE)) {
+            testChangeRootLogLevel(PROFILE);
+        }
     }
 
     @Test
     public void testSetRootLogger() throws Exception {
         testSetRootLogger(null);
-        testSetRootLogger(PROFILE);
+        try (TestLoggingProfileLoggerRouter ignored = TestLoggingProfileLoggerRouter.create(PROFILE)) {
+            testSetRootLogger(PROFILE);
+        }
     }
 
     @Test
     public void testAddRemoveFileHandler() throws Exception {
         testAddRemoveFileHandler(null);
-        testAddRemoveFileHandler(PROFILE);
+        try (TestLoggingProfileLoggerRouter ignored = TestLoggingProfileLoggerRouter.create(PROFILE)) {
+            testAddRemoveFileHandler(PROFILE);
+        }
     }
 
     @Test
     public void testDisableHandler() throws Exception {
         testDisableHandler(null, false);
-        testDisableHandler(PROFILE, false);
+        try (TestLoggingProfileLoggerRouter ignored = TestLoggingProfileLoggerRouter.create(PROFILE)) {
+            testDisableHandler(PROFILE, false);
+        }
     }
 
     @Test
     public void testLegacyDisableHandler() throws Exception {
         testDisableHandler(null, true);
-        testDisableHandler(PROFILE, true);
+        try (TestLoggingProfileLoggerRouter ignored = TestLoggingProfileLoggerRouter.create(PROFILE)) {
+            testDisableHandler(PROFILE, true);
+        }
     }
 
     @Test
     public void testPatternFormatter() throws Exception {
         testPatternFormatter(null);
-        testPatternFormatter(PROFILE);
+        try (TestLoggingProfileLoggerRouter ignored = TestLoggingProfileLoggerRouter.create(PROFILE)) {
+            testPatternFormatter(PROFILE);
+        }
     }
 
     @Test
     public void testCompositeOperations() {
         testCompositeOperations(null);
-        testCompositeOperations(PROFILE);
+        try (TestLoggingProfileLoggerRouter ignored = TestLoggingProfileLoggerRouter.create(PROFILE)) {
+            testCompositeOperations(PROFILE);
+        }
     }
 
     @Test
@@ -301,8 +314,10 @@ public class LoggingOperationsSubsystemTestCase extends AbstractLoggingSubsystem
 
         // Log with and without profile
         final String msg = "This is a test message";
-        doLog(null, LEVELS, msg);
-        doLog(PROFILE, LEVELS, msg);
+        doLog(LEVELS, msg);
+        try (TestLoggingProfileLoggerRouter ignored = TestLoggingProfileLoggerRouter.create(PROFILE)) {
+            doLog(LEVELS, msg);
+        }
 
         // Reset the formatters
         op = SubsystemOperations.createWriteAttributeOperation(handlerAddress, AbstractHandlerDefinition.FORMATTER, defaultHandlerFormat);
@@ -372,7 +387,7 @@ public class LoggingOperationsSubsystemTestCase extends AbstractLoggingSubsystem
             // change root log level
             final ModelNode op = SubsystemOperations.createWriteAttributeOperation(address, CommonAttributes.LEVEL, level.getName());
             executeOperation(kernelServices, op);
-            doLog(loggingProfile, levels, "RootLoggerTestCaseTST %s", level);
+            doLog(levels, "RootLoggerTestCaseTST %s", level);
         }
 
         // Remove the handler
@@ -429,7 +444,7 @@ public class LoggingOperationsSubsystemTestCase extends AbstractLoggingSubsystem
         for (String handler : handlers) op.get(LoggerAttributes.HANDLERS.getName()).add(handler);
         op.get(LoggerAttributes.HANDLERS.getName()).add(fileHandlerName);
         executeOperation(kernelServices, op);
-        doLog(loggingProfile, LEVELS, "Test123");
+        doLog(LEVELS, "Test123");
 
         // Remove the root logger
         op = SubsystemOperations.createRemoveOperation(rootLoggerAddress);
@@ -471,7 +486,7 @@ public class LoggingOperationsSubsystemTestCase extends AbstractLoggingSubsystem
         ModelNode handlerResult = executeOperation(kernelServices, op);
         List<String> handlerList = SubsystemOperations.readResultAsList(handlerResult);
         assertTrue(String.format("Handler '%s' was not found. Result: %s", fileHandlerName, handlerResult), handlerList.contains(fileHandlerName));
-        doLog(loggingProfile, LEVELS, "Test123");
+        doLog(LEVELS, "Test123");
 
         // Remove handler from logger
         op = SubsystemOperations.createOperation("root-logger-unassign-handler", rootLoggerAddress);
@@ -492,7 +507,7 @@ public class LoggingOperationsSubsystemTestCase extends AbstractLoggingSubsystem
 
         // verify that the logger is stopped, no more logs are coming to the file
         long checksum = checksumCRC32(logFile);
-        doLog(loggingProfile, LEVELS, "Test123");
+        doLog(LEVELS, "Test123");
         assertEquals(checksum, checksumCRC32(logFile));
     }
 
@@ -512,7 +527,7 @@ public class LoggingOperationsSubsystemTestCase extends AbstractLoggingSubsystem
         assertTrue(String.format("Handler '%s' was not found. Result: %s", fileHandlerName, handlerResult), handlerList.contains(fileHandlerName));
 
         // Get the logger
-        final Logger logger = getLogger(profileName);
+        final Logger logger = getLogger();
 
         // Log 3 lines
         logger.info("Test message 1");
@@ -568,7 +583,7 @@ public class LoggingOperationsSubsystemTestCase extends AbstractLoggingSubsystem
         final ModelNode handlerAddress = addFileHandler(kernelServices, profileName, fileHandlerName, org.jboss.logmanager.Level.INFO, logFile, false);
 
         // Get the logger
-        final Logger logger = getLogger(profileName);
+        final Logger logger = getLogger();
 
         // Create the logger
         final ModelNode loggerAddress = createLoggerAddress(profileName, logger.getName()).toModelNode();
@@ -713,22 +728,16 @@ public class LoggingOperationsSubsystemTestCase extends AbstractLoggingSubsystem
         return result;
     }
 
-    private void doLog(final String loggingProfile, final Level[] levels, final String format, final Object... params) {
-        final Logger log = getLogger(loggingProfile);
+    private void doLog(final Level[] levels, final String format, final Object... params) {
+        final Logger log = getLogger();
         // log a message
         for (Level lvl : levels) {
             log.log(lvl, String.format(format, params));
         }
     }
 
-    private Logger getLogger(final String profileName) {
-        final LogContext logContext;
-        if (profileName != null) {
-            logContext = LoggingProfileContextSelector.getInstance().get(profileName);
-        } else {
-            logContext = LogContext.getSystemLogContext();
-        }
-        return logContext.getLogger(FQCN);
+    private Logger getLogger() {
+        return Logger.getLogger(FQCN);
     }
 
     private ModelNode createAddHandlerOperation(final ModelNode address, final String handlerName) {

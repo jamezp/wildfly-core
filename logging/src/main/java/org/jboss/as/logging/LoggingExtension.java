@@ -73,12 +73,8 @@ import org.jboss.as.logging.handlers.SyslogHandlerResourceDefinition;
 import org.jboss.as.logging.loggers.LoggerResourceDefinition;
 import org.jboss.as.logging.loggers.RootLoggerResourceDefinition;
 import org.jboss.as.logging.logging.LoggingLogger;
-import org.jboss.as.logging.logmanager.WildFlyLogContextSelector;
 import org.jboss.as.logging.stdio.LogContextStdioContextSelector;
 import org.jboss.dmr.ModelNode;
-import org.jboss.logmanager.LogContext;
-import org.jboss.modules.Module;
-import org.jboss.modules.ModuleLoader;
 import org.jboss.staxmapper.XMLElementReader;
 import org.jboss.stdio.StdioContext;
 import org.wildfly.security.manager.WildFlySecurityManager;
@@ -93,7 +89,6 @@ public class LoggingExtension implements Extension {
     private static final String RESOURCE_NAME = LoggingExtension.class.getPackage().getName() + ".LocalDescriptions";
 
     private static final String SKIP_LOG_MANAGER_PROPERTY = "org.wildfly.logging.skipLogManagerCheck";
-    private static final String EMBEDDED_PROPERTY = "org.wildfly.logging.embedded";
 
     private static final PathElement LOGGING_PROFILE_PATH = PathElement.pathElement(CommonAttributes.LOGGING_PROFILE);
 
@@ -155,22 +150,13 @@ public class LoggingExtension implements Extension {
     public void initialize(final ExtensionContext context) {
         final ProcessType processType = context.getProcessType();
         final boolean embedded = processType == ProcessType.EMBEDDED_HOST_CONTROLLER || processType == ProcessType.EMBEDDED_SERVER;
-        final WildFlyLogContextSelector contextSelector;
 
         // For embedded servers we want to use a custom default LogContext
-        if (embedded) {
-            // Use the standard WildFlyLogContextSelector if we should wrap the current log context
-            if (getBooleanProperty(EMBEDDED_PROPERTY, true)) {
-                contextSelector = WildFlyLogContextSelector.Factory.createEmbedded();
-            } else {
-                contextSelector = WildFlyLogContextSelector.Factory.create();
-            }
-        } else {
-
+        if (!embedded) {
             // The logging subsystem requires JBoss Log Manager to be used. Note this can be overridden and may fail late
             // instead of early. The reason to allow for the comparison to be overridden is some environments may wrap
             // the log manager. As long as the delegate log manager is JBoss Log Manager we should be okay.
-            if (getBooleanProperty(SKIP_LOG_MANAGER_PROPERTY, false)) {
+            if (skipLogManagerCheck()) {
                 LoggingLogger.ROOT_LOGGER.debugf("System property %s was set to true. Skipping the log manager check.", SKIP_LOG_MANAGER_PROPERTY);
                 // Since we're overriding we will check the log manager system property and log a warning if the value is
                 // not org.jboss.logmanager.LogManager.
@@ -184,25 +170,9 @@ public class LoggingExtension implements Extension {
                     throw LoggingLogger.ROOT_LOGGER.extensionNotInitialized();
                 }
             }
-            contextSelector = WildFlyLogContextSelector.Factory.create();
 
             // Install STDIO context selector
             StdioContext.setStdioContextSelector(new LogContextStdioContextSelector(StdioContext.getStdioContext()));
-        }
-        LogContext.setLogContextSelector(contextSelector);
-
-        // Load logging API modules
-        try {
-            final ModuleLoader moduleLoader = Module.forClass(LoggingExtension.class).getModuleLoader();
-            for (LoggingModuleDependency dependency : LoggingModuleDependency.values()) {
-                try {
-                    contextSelector.addLogApiClassLoader(moduleLoader.loadModule(dependency.getModuleName()).getClassLoader());
-                } catch (Throwable ignore) {
-                    // ignore
-                }
-            }
-        } catch (Exception ignore) {
-            // ignore
         }
 
         final SubsystemRegistration subsystem = context.registerSubsystem(SUBSYSTEM_NAME, CURRENT_VERSION);
@@ -213,7 +183,7 @@ public class LoggingExtension implements Extension {
         if (context.getProcessType().isServer()) {
             pathManager = context.getPathManager();
         }
-        final LoggingResourceDefinition rootResource = new LoggingResourceDefinition(pathManager, contextSelector);
+        final LoggingResourceDefinition rootResource = new LoggingResourceDefinition(pathManager, embedded);
         final ManagementResourceRegistration registration = subsystem.registerSubsystemModel(rootResource);
         registration.registerOperationHandler(GenericSubsystemDescribeHandler.DEFINITION, DESCRIBE_HANDLER);
         // Register root sub-models
@@ -398,10 +368,10 @@ public class LoggingExtension implements Extension {
         context.setSubsystemXmlMapping(SUBSYSTEM_NAME, namespace.getUriString(), parser);
     }
 
-    private static boolean getBooleanProperty(final String property, final boolean dft) {
-        final String value = WildFlySecurityManager.getPropertyPrivileged(property, null);
+    private static boolean skipLogManagerCheck() {
+        final String value = WildFlySecurityManager.getPropertyPrivileged(SKIP_LOG_MANAGER_PROPERTY, null);
         if (value == null) {
-            return dft;
+            return false;
         }
         return value.isEmpty() || Boolean.parseBoolean(value);
     }

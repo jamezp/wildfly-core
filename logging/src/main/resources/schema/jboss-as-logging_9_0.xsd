@@ -60,6 +60,18 @@
                     </xs:documentation>
                 </xs:annotation>
             </xs:element>
+            <xs:element name="allow-log-routing" type="booleanTrueValueType">
+                <xs:annotation>
+                    <xs:documentation>
+                        <![CDATA[
+                            Determines whether or not the thread's context loader will be used to determine where log messages
+                            should be routed. If enabled log messages from modules may be sent to a deployments log configuration
+                            if the deployment has a log configuration and the thread's context class loader is set to the
+                            deployments class loader.
+                        ]]>
+                    </xs:documentation>
+                </xs:annotation>
+            </xs:element>
             <xs:element name="use-deployment-logging-config" type="booleanTrueValueType">
                 <xs:annotation>
                     <xs:documentation>

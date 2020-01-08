@@ -125,9 +125,13 @@ public class RootSubsystemOperationsTestCase extends AbstractOperationsTestCase 
         testReadLogFile(kernelServices, op, getLogger());
 
         // Test on the logging-profile
-        final ModelNode profileAddress = SUBSYSTEM_ADDRESS.append("logging-profile", "testProfile").append("log-file", "profile-simple.log").toModelNode();
-        op = SubsystemOperations.createOperation("read-log-file", profileAddress);
-        testReadLogFile(kernelServices, op, getLogger("testProfile"));
+        try (TestLoggingProfileLoggerRouter ignored = TestLoggingProfileLoggerRouter.create("testProfile")) {
+            final ModelNode profileAddress = SUBSYSTEM_ADDRESS.append("logging-profile", "testProfile")
+                    .append("log-file", "profile-simple.log")
+                    .toModelNode();
+            op = SubsystemOperations.createOperation("read-log-file", profileAddress);
+            testReadLogFile(kernelServices, op, getLogger("testProfile"));
+        }
 
         // Test file in subdirectory
         final ModelNode subFhAddress = createFileHandlerAddress("sub-fh").toModelNode();

@@ -34,6 +34,8 @@ import java.io.InputStreamReader;
 import java.nio.file.Path;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
@@ -64,7 +66,6 @@ import org.jboss.as.controller.transform.description.DiscardAttributeChecker;
 import org.jboss.as.controller.transform.description.RejectAttributeChecker;
 import org.jboss.as.controller.transform.description.ResourceTransformationDescriptionBuilder;
 import org.jboss.as.logging.logging.LoggingLogger;
-import org.jboss.as.logging.logmanager.WildFlyLogContextSelector;
 import org.jboss.as.server.ServerEnvironment;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.ModelType;
@@ -83,6 +84,17 @@ public class LoggingResourceDefinition extends TransformerResourceDefinition {
             .setAttributeMarshaller(ElementAttributeMarshaller.VALUE_ATTRIBUTE_MARSHALLER)
             .setDefaultValue(ModelNode.TRUE)
             .setFlags(Flag.RESTART_ALL_SERVICES)
+            .build();
+
+    // TODO (jrp) what do we think of this name?
+    static final SimpleAttributeDefinition ALLOW_LOG_ROUTING = SimpleAttributeDefinitionBuilder.create("allow-log-routing", ModelType.BOOLEAN, true)
+            .setAllowExpression(true)
+            .setAttributeMarshaller(ElementAttributeMarshaller.VALUE_ATTRIBUTE_MARSHALLER)
+            .setDefaultValue(ModelNode.TRUE)
+            // TODO (jrp) We need to make some decision here. We need to restart the JVM if it was true changing to false.
+            // TODO (jrp) We don't need to restart the JVM if it was false changing to true.
+            //.setRestartJVM()
+            .setRestartAllServices()
             .build();
 
     static final SimpleAttributeDefinition USE_DEPLOYMENT_LOGGING_CONFIG = SimpleAttributeDefinitionBuilder.create("use-deployment-logging-config", ModelType.BOOLEAN, true)
@@ -145,17 +157,18 @@ public class LoggingResourceDefinition extends TransformerResourceDefinition {
             .setRuntimeOnly()
             .build();
 
-    static final SimpleAttributeDefinition[] ATTRIBUTES = {
+    static final Collection<AttributeDefinition> ATTRIBUTES = Arrays.asList(
             ADD_LOGGING_API_DEPENDENCIES,
-            USE_DEPLOYMENT_LOGGING_CONFIG,
-    };
+            ALLOW_LOG_ROUTING,
+            USE_DEPLOYMENT_LOGGING_CONFIG
+    );
 
     private final PathManager pathManager;
 
-    protected LoggingResourceDefinition(final PathManager pathManager, final WildFlyLogContextSelector contextSelector) {
+    protected LoggingResourceDefinition(final PathManager pathManager, final boolean embeddedServer) {
         super(
                 new Parameters(SUBSYSTEM_PATH, LoggingExtension.getResourceDescriptionResolver())
-                        .setAddHandler(new LoggingSubsystemAdd(pathManager, contextSelector))
+                        .setAddHandler(new LoggingSubsystemAdd(pathManager, embeddedServer))
                         .setRemoveHandler(ReloadRequiredRemoveStepHandler.INSTANCE)
                         .setAddRestartLevel(OperationEntry.Flag.RESTART_ALL_SERVICES)
         );
@@ -167,7 +180,7 @@ public class LoggingResourceDefinition extends TransformerResourceDefinition {
         super.registerAttributes(resourceRegistration);
 
         final OperationStepHandler writeHandler = new ReloadRequiredWriteAttributeHandler(ATTRIBUTES);
-        for (SimpleAttributeDefinition attribute : ATTRIBUTES) {
+        for (AttributeDefinition attribute : ATTRIBUTES) {
             resourceRegistration.registerReadWriteAttribute(attribute, null, writeHandler);
         }
     }
@@ -189,6 +202,17 @@ public class LoggingResourceDefinition extends TransformerResourceDefinition {
                 rootResourceBuilder.getAttributeBuilder()
                         .setDiscard(DiscardAttributeChecker.DEFAULT_VALUE, USE_DEPLOYMENT_LOGGING_CONFIG)
                         .addRejectCheck(RejectAttributeChecker.DEFINED, USE_DEPLOYMENT_LOGGING_CONFIG)
+                        .end();
+                rootResourceBuilder.getAttributeBuilder()
+                        .setDiscard(new DiscardAttributeChecker.DiscardAttributeValueChecker(false, true, ALLOW_LOG_ROUTING.getDefaultValue()), ALLOW_LOG_ROUTING)
+                        .addRejectCheck(RejectAttributeChecker.DEFINED, ALLOW_LOG_ROUTING)
+                        .end();
+                break;
+            }
+            case VERSION_8_0_0: {
+                rootResourceBuilder.getAttributeBuilder()
+                        .setDiscard(new DiscardAttributeChecker.DiscardAttributeValueChecker(false, true, ALLOW_LOG_ROUTING.getDefaultValue()), ALLOW_LOG_ROUTING)
+                        .addRejectCheck(RejectAttributeChecker.DEFINED, ALLOW_LOG_ROUTING)
                         .end();
                 break;
             }

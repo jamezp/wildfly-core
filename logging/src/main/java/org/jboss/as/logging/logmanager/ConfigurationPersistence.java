@@ -30,6 +30,7 @@ import java.io.InputStream;
 import java.nio.channels.FileLock;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.function.Supplier;
 
 import org.jboss.as.controller.OperationContext;
 import org.jboss.as.logging.CommonAttributes;
@@ -37,6 +38,7 @@ import org.jboss.as.logging.logging.LoggingLogger;
 import org.jboss.as.logging.resolvers.FileResolver;
 import org.jboss.logmanager.Configurator;
 import org.jboss.logmanager.LogContext;
+import org.jboss.logmanager.LogContextSelector;
 import org.jboss.logmanager.Logger;
 import org.jboss.logmanager.PropertyConfigurator;
 import org.jboss.logmanager.config.ErrorManagerConfiguration;
@@ -55,6 +57,7 @@ import org.jboss.logmanager.config.PojoConfiguration;
  *
  * @author <a href="mailto:jperkins@redhat.com">James R. Perkins</a>
  */
+// TODO (jrp) do we need to wrap the calls like this?
 public class ConfigurationPersistence implements Configurator, LogContextConfiguration {
 
     private static final Object LOCK = new Object();
@@ -90,32 +93,37 @@ public class ConfigurationPersistence implements Configurator, LogContextConfigu
      * @return the property configurator
      */
     public static ConfigurationPersistence getOrCreateConfigurationPersistence(final LogContext logContext) {
-        final Logger root = logContext.getLogger(CommonAttributes.ROOT_LOGGER_NAME);
-        final ConfigurationPersistence result;
-        synchronized (LOCK) {
-            Configurator configurator = root.getAttachment(Configurator.ATTACHMENT_KEY);
-            if (configurator == null) {
-                configurator = new ConfigurationPersistence(logContext);
-                Configurator existing = root.attachIfAbsent(Configurator.ATTACHMENT_KEY, configurator);
-                if (existing != null) {
-                    configurator = existing;
+        final LogContext old = pushContext(logContext);
+        try {
+            final Logger root = logContext.getLogger(CommonAttributes.ROOT_LOGGER_NAME);
+            final ConfigurationPersistence result;
+            synchronized (LOCK) {
+                Configurator configurator = root.getAttachment(Configurator.ATTACHMENT_KEY);
+                if (configurator == null) {
+                    configurator = new ConfigurationPersistence(logContext);
+                    Configurator existing = root.attachIfAbsent(Configurator.ATTACHMENT_KEY, configurator);
+                    if (existing != null) {
+                        configurator = existing;
+                    }
+                }
+                if (configurator instanceof ConfigurationPersistence) {
+                    // We have the correct configurator
+                    result = (ConfigurationPersistence) configurator;
+                } else if (configurator instanceof PropertyConfigurator) {
+                    // Create a new configurator delegating to the configurator found
+                    result = new ConfigurationPersistence((PropertyConfigurator) configurator);
+                    root.attach(Configurator.ATTACHMENT_KEY, result);
+                } else {
+                    // An unknown configurator, log a warning and replace
+                    LoggingLogger.ROOT_LOGGER.replacingConfigurator(configurator);
+                    result = new ConfigurationPersistence(logContext);
+                    root.attach(Configurator.ATTACHMENT_KEY, result);
                 }
             }
-            if (configurator instanceof ConfigurationPersistence) {
-                // We have the correct configurator
-                result = (ConfigurationPersistence) configurator;
-            } else if (configurator instanceof PropertyConfigurator) {
-                // Create a new configurator delegating to the configurator found
-                result = new ConfigurationPersistence((PropertyConfigurator) configurator);
-                root.attach(Configurator.ATTACHMENT_KEY, result);
-            } else {
-                // An unknown configurator, log a warning and replace
-                LoggingLogger.ROOT_LOGGER.replacingConfigurator(configurator);
-                result = new ConfigurationPersistence(logContext);
-                root.attach(Configurator.ATTACHMENT_KEY, result);
-            }
+            return result;
+        } finally {
+            popContext(old);
         }
-        return result;
     }
 
     /**
@@ -142,203 +150,208 @@ public class ConfigurationPersistence implements Configurator, LogContextConfigu
     @Override
     public void configure(final InputStream inputStream) throws IOException {
         synchronized (LOCK) {
-            config.configure(inputStream);
+            final LogContext old = pushContext(config.getLogContextConfiguration().getLogContext());
+            try {
+                config.configure(inputStream);
+            } finally {
+                popContext(old);
+            }
         }
     }
 
     @Override
     public LogContext getLogContext() {
         synchronized (LOCK) {
-            return delegate.getLogContext();
+            return wrap(delegate::getLogContext);
         }
     }
 
     @Override
     public LoggerConfiguration addLoggerConfiguration(final String loggerName) {
         synchronized (LOCK) {
-            return delegate.addLoggerConfiguration(loggerName);
+            return wrap(() -> delegate.addLoggerConfiguration(loggerName));
         }
     }
 
     @Override
     public boolean removeLoggerConfiguration(final String loggerName) {
         synchronized (LOCK) {
-            return delegate.removeLoggerConfiguration(loggerName);
+            return wrap(() -> delegate.removeLoggerConfiguration(loggerName));
         }
     }
 
     @Override
     public LoggerConfiguration getLoggerConfiguration(final String loggerName) {
         synchronized (LOCK) {
-            return delegate.getLoggerConfiguration(loggerName);
+            return wrap(() -> delegate.getLoggerConfiguration(loggerName));
         }
     }
 
     @Override
     public List<String> getLoggerNames() {
         synchronized (LOCK) {
-            return delegate.getLoggerNames();
+            return wrap(delegate::getLoggerNames);
         }
     }
 
     @Override
     public HandlerConfiguration addHandlerConfiguration(final String moduleName, final String className, final String handlerName, final String... constructorProperties) {
         synchronized (LOCK) {
-            return delegate.addHandlerConfiguration(moduleName, className, handlerName, constructorProperties);
+            return wrap(() -> delegate.addHandlerConfiguration(moduleName, className, handlerName, constructorProperties));
         }
     }
 
     @Override
     public boolean removeHandlerConfiguration(final String handlerName) {
         synchronized (LOCK) {
-            return delegate.removeHandlerConfiguration(handlerName);
+            return wrap(() -> delegate.removeHandlerConfiguration(handlerName));
         }
     }
 
     @Override
     public HandlerConfiguration getHandlerConfiguration(final String handlerName) {
         synchronized (LOCK) {
-            return delegate.getHandlerConfiguration(handlerName);
+            return wrap(() -> delegate.getHandlerConfiguration(handlerName));
         }
     }
 
     @Override
     public List<String> getHandlerNames() {
         synchronized (LOCK) {
-            return delegate.getHandlerNames();
+            return wrap(delegate::getHandlerNames);
         }
     }
 
     @Override
     public FormatterConfiguration addFormatterConfiguration(final String moduleName, final String className, final String formatterName, final String... constructorProperties) {
         synchronized (LOCK) {
-            return delegate.addFormatterConfiguration(moduleName, className, formatterName, constructorProperties);
+            return wrap(() -> delegate.addFormatterConfiguration(moduleName, className, formatterName, constructorProperties));
         }
     }
 
     @Override
     public boolean removeFormatterConfiguration(final String formatterName) {
         synchronized (LOCK) {
-            return delegate.removeFormatterConfiguration(formatterName);
+            return wrap(() -> delegate.removeFormatterConfiguration(formatterName));
         }
     }
 
     @Override
     public FormatterConfiguration getFormatterConfiguration(final String formatterName) {
         synchronized (LOCK) {
-            return delegate.getFormatterConfiguration(formatterName);
+            return wrap(() -> delegate.getFormatterConfiguration(formatterName));
         }
     }
 
     @Override
     public List<String> getFormatterNames() {
         synchronized (LOCK) {
-            return delegate.getFormatterNames();
+            return wrap(delegate::getFormatterNames);
         }
     }
 
     @Override
     public FilterConfiguration addFilterConfiguration(final String moduleName, final String className, final String filterName, final String... constructorProperties) {
         synchronized (LOCK) {
-            return delegate.addFilterConfiguration(moduleName, className, filterName, constructorProperties);
+            return wrap(() -> delegate.addFilterConfiguration(moduleName, className, filterName, constructorProperties));
         }
     }
 
     @Override
     public boolean removeFilterConfiguration(final String filterName) {
         synchronized (LOCK) {
-            return delegate.removeFilterConfiguration(filterName);
+            return wrap(() -> delegate.removeFilterConfiguration(filterName));
         }
     }
 
     @Override
     public FilterConfiguration getFilterConfiguration(final String filterName) {
         synchronized (LOCK) {
-            return delegate.getFilterConfiguration(filterName);
+            return wrap(() -> delegate.getFilterConfiguration(filterName));
         }
     }
 
     @Override
     public List<String> getFilterNames() {
         synchronized (LOCK) {
-            return delegate.getFilterNames();
+            return wrap(delegate::getFilterNames);
         }
     }
 
     @Override
     public ErrorManagerConfiguration addErrorManagerConfiguration(final String moduleName, final String className, final String errorManagerName, final String... constructorProperties) {
         synchronized (LOCK) {
-            return delegate.addErrorManagerConfiguration(moduleName, className, errorManagerName, constructorProperties);
+            return wrap(() -> delegate.addErrorManagerConfiguration(moduleName, className, errorManagerName, constructorProperties));
         }
     }
 
     @Override
     public boolean removeErrorManagerConfiguration(final String errorManagerName) {
         synchronized (LOCK) {
-            return delegate.removeErrorManagerConfiguration(errorManagerName);
+            return wrap(() -> delegate.removeErrorManagerConfiguration(errorManagerName));
         }
     }
 
     @Override
     public ErrorManagerConfiguration getErrorManagerConfiguration(final String errorManagerName) {
         synchronized (LOCK) {
-            return delegate.getErrorManagerConfiguration(errorManagerName);
+            return wrap(() -> delegate.getErrorManagerConfiguration(errorManagerName));
         }
     }
 
     @Override
     public List<String> getErrorManagerNames() {
         synchronized (LOCK) {
-            return delegate.getErrorManagerNames();
+            return wrap(delegate::getErrorManagerNames);
         }
     }
 
     @Override
     public void prepare() {
         synchronized (LOCK) {
-            delegate.prepare();
+            wrap(delegate::prepare);
         }
     }
 
     @Override
     public PojoConfiguration addPojoConfiguration(final String moduleName, final String className, final String pojoName, final String... constructorProperties) {
         synchronized (LOCK) {
-            return delegate.addPojoConfiguration(moduleName, className, pojoName, constructorProperties);
+            return wrap(() -> delegate.addPojoConfiguration(moduleName, className, pojoName, constructorProperties));
         }
     }
 
     @Override
     public boolean removePojoConfiguration(final String pojoName) {
         synchronized (LOCK) {
-            return delegate.removePojoConfiguration(pojoName);
+            return wrap(() -> delegate.removePojoConfiguration(pojoName));
         }
     }
 
     @Override
     public PojoConfiguration getPojoConfiguration(final String pojoName) {
         synchronized (LOCK) {
-            return delegate.getPojoConfiguration(pojoName);
+            return wrap(() -> delegate.getPojoConfiguration(pojoName));
         }
     }
 
     @Override
     public List<String> getPojoNames() {
         synchronized (LOCK) {
-            return delegate.getPojoNames();
+            return wrap(delegate::getPojoNames);
         }
     }
 
     @Override
     public void commit() {
         synchronized (LOCK) {
-            delegate.commit();
+            wrap(delegate::commit);
         }
     }
 
     @Override
     public void forget() {
         synchronized (LOCK) {
-            delegate.forget();
+            wrap(delegate::forget);
         }
     }
 
@@ -400,10 +413,12 @@ public class ConfigurationPersistence implements Configurator, LogContextConfigu
                     try {
                         out = new FileOutputStream(configFile);
                         final FileLock lock = out.getChannel().lock();
+                        final LogContext old = pushContext(config.getLogContextConfiguration().getLogContext());
                         try {
                             out.write(NOTE_MESSAGE);
                             config.writeConfiguration(out);
                         } finally {
+                            popContext(old);
                             // The write should close the stream which would release the lock this check ensures the
                             // lock will be released
                             if (lock.isValid()) {
@@ -420,6 +435,39 @@ public class ConfigurationPersistence implements Configurator, LogContextConfigu
                     forget();
                 }
             }
+        }
+    }
+
+    private <V> V wrap(final Supplier<V> action) {
+        final LogContext old = pushContext(config.getLogContextConfiguration().getLogContext());
+        try {
+            return action.get();
+        } finally {
+            popContext(old);
+        }
+    }
+
+    private void wrap(final Runnable action) {
+        final LogContext old = pushContext(config.getLogContextConfiguration().getLogContext());
+        try {
+            action.run();
+        } finally {
+            popContext(old);
+        }
+    }
+
+    private static LogContext pushContext(final LogContext context) {
+        final LogContextSelector selector = LogContext.getLogContextSelector();
+        if (selector instanceof WildFlyLogContextSelector) {
+            return ((WildFlyLogContextSelector) selector).setLocalContext(context);
+        }
+        return null;
+    }
+
+    private static void popContext(final LogContext old) {
+        final LogContextSelector selector = LogContext.getLogContextSelector();
+        if (selector instanceof WildFlyLogContextSelector) {
+            ((WildFlyLogContextSelector) selector).setLocalContext(old);
         }
     }
 }

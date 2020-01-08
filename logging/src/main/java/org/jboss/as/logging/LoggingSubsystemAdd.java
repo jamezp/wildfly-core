@@ -60,20 +60,25 @@ import org.jboss.as.server.AbstractDeploymentChainStep;
 import org.jboss.as.server.DeploymentProcessorTarget;
 import org.jboss.as.server.deployment.Phase;
 import org.jboss.dmr.ModelNode;
+import org.jboss.logmanager.LogContext;
 import org.jboss.logmanager.config.LogContextConfiguration;
+import org.jboss.modules.Module;
+import org.jboss.modules.ModuleLoader;
+import org.wildfly.security.manager.WildFlySecurityManager;
 
 /**
  * @author <a href="mailto:jperkins@redhat.com">James R. Perkins</a>
  */
 class LoggingSubsystemAdd extends AbstractAddStepHandler {
+    private static final String EMBEDDED_PROPERTY = "org.wildfly.logging.embedded";
 
     private final PathManager pathManager;
-    private final WildFlyLogContextSelector contextSelector;
+    private final boolean embeddedServer;
 
-    LoggingSubsystemAdd(final PathManager pathManager, final WildFlyLogContextSelector contextSelector) {
+    LoggingSubsystemAdd(final PathManager pathManager, final boolean embeddedServer) {
         super(LoggingResourceDefinition.ATTRIBUTES);
         this.pathManager = pathManager;
-        this.contextSelector = contextSelector;
+        this.embeddedServer = embeddedServer;
     }
 
     @Override
@@ -90,6 +95,38 @@ class LoggingSubsystemAdd extends AbstractAddStepHandler {
     protected void performRuntime(final OperationContext context, final ModelNode operation, final ModelNode model) throws OperationFailedException {
         final boolean addDependencies = LoggingResourceDefinition.ADD_LOGGING_API_DEPENDENCIES.resolveModelAttribute(context, model).asBoolean();
         final boolean useLoggingConfig = LoggingResourceDefinition.USE_DEPLOYMENT_LOGGING_CONFIG.resolveModelAttribute(context, model).asBoolean();
+        final boolean allowLogRouting = LoggingResourceDefinition.ALLOW_LOG_ROUTING.resolveModelAttribute(context, model).asBoolean();
+
+        // Configure the log context
+        final WildFlyLogContextSelector contextSelector;
+        if (embeddedServer) {
+            // Use the standard WildFlyLogContextSelector if we should wrap the current log context
+            if (useEmbeddedLogContext()) {
+                contextSelector = WildFlyLogContextSelector.Factory.createEmbedded(allowLogRouting);
+            } else {
+                contextSelector = WildFlyLogContextSelector.Factory.create(allowLogRouting);
+            }
+        } else {
+            contextSelector = WildFlyLogContextSelector.Factory.create(allowLogRouting);
+        }
+        LogContext.setLogContextSelector(contextSelector);
+
+        // Load logging API modules
+        try {
+            // Add the class loader for this extension to the API class loaders
+            contextSelector.addLogApiClassLoader(getClass().getClassLoader());
+            final ModuleLoader moduleLoader = Module.forClass(LoggingSubsystemAdd.class).getModuleLoader();
+            for (LoggingModuleDependency dependency : LoggingModuleDependency.values()) {
+                try {
+                    contextSelector.addLogApiClassLoader(moduleLoader.loadModule(dependency.getModuleName()).getClassLoader());
+                } catch (Throwable ignore) {
+                    // ignore
+                }
+            }
+        } catch (Exception ignore) {
+            // ignore
+        }
+
         context.addStep(new AbstractDeploymentChainStep() {
             @Override
             protected void execute(final DeploymentProcessorTarget processorTarget) {
@@ -166,5 +203,13 @@ class LoggingSubsystemAdd extends AbstractAddStepHandler {
 
         LoggingOperations.addCommitStep(context, configurationPersistence);
         LoggingLogger.ROOT_LOGGER.trace("Logging subsystem has been added.");
+    }
+
+    private static boolean useEmbeddedLogContext() {
+        final String value = WildFlySecurityManager.getPropertyPrivileged(EMBEDDED_PROPERTY, null);
+        if (value == null) {
+            return true;
+        }
+        return value.isEmpty() || Boolean.parseBoolean(value);
     }
 }
