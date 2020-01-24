@@ -99,7 +99,7 @@ public class LoggingExtension implements Extension {
 
     private static final GenericSubsystemDescribeHandler DESCRIBE_HANDLER = GenericSubsystemDescribeHandler.create(LoggingChildResourceComparator.INSTANCE);
 
-    private static final int MANAGEMENT_API_MAJOR_VERSION = 9;
+    private static final int MANAGEMENT_API_MAJOR_VERSION = 10;
     private static final int MANAGEMENT_API_MINOR_VERSION = 0;
     private static final int MANAGEMENT_API_MICRO_VERSION = 0;
 
@@ -261,6 +261,7 @@ public class LoggingExtension implements Extension {
         setParser(context, Namespace.LOGGING_6_0, new LoggingSubsystemParser_6_0());
         setParser(context, Namespace.LOGGING_7_0, new LoggingSubsystemParser_7_0());
         setParser(context, Namespace.LOGGING_8_0, new LoggingSubsystemParser_8_0());
+        setParser(context, Namespace.LOGGING_9_0, new LoggingSubsystemParser_9_0());
 
         // Hack to ensure the Element and Attribute enums are loaded during this call which
         // is part of concurrent boot. These enums trigger a lot of classloading and static
@@ -352,7 +353,8 @@ public class LoggingExtension implements Extension {
     private void registerTransformers(final SubsystemRegistration registration, final TransformerResourceDefinition... defs) {
         ChainedTransformationDescriptionBuilder chainedBuilder = TransformationDescriptionBuilder.Factory.createChainedSubystemInstance(registration.getSubsystemVersion());
 
-        registerTransformers(chainedBuilder, registration.getSubsystemVersion(), KnownModelVersion.VERSION_8_0_0, defs);
+        registerTransformers(chainedBuilder, registration.getSubsystemVersion(), KnownModelVersion.VERSION_9_0_0, defs);
+        registerTransformers(chainedBuilder, KnownModelVersion.VERSION_9_0_0, KnownModelVersion.VERSION_8_0_0, defs);
         registerTransformers(chainedBuilder, KnownModelVersion.VERSION_8_0_0, KnownModelVersion.VERSION_7_0_0, defs);
         registerTransformers(chainedBuilder, KnownModelVersion.VERSION_7_0_0, KnownModelVersion.VERSION_6_0_0, defs);
         registerTransformers(chainedBuilder, KnownModelVersion.VERSION_6_0_0, KnownModelVersion.VERSION_5_0_0, defs);
@@ -366,6 +368,7 @@ public class LoggingExtension implements Extension {
                 KnownModelVersion.VERSION_6_0_0.getModelVersion(),
                 KnownModelVersion.VERSION_7_0_0.getModelVersion(),
                 KnownModelVersion.VERSION_8_0_0.getModelVersion(),
+                KnownModelVersion.VERSION_9_0_0.getModelVersion(),
         }, new ModelVersion[] {
                 KnownModelVersion.VERSION_1_5_0.getModelVersion(),
                 KnownModelVersion.VERSION_3_0_0.getModelVersion(),
@@ -374,6 +377,7 @@ public class LoggingExtension implements Extension {
                 KnownModelVersion.VERSION_6_0_0.getModelVersion(),
                 KnownModelVersion.VERSION_7_0_0.getModelVersion(),
                 KnownModelVersion.VERSION_8_0_0.getModelVersion(),
+                KnownModelVersion.VERSION_9_0_0.getModelVersion(),
         });
     }
 
