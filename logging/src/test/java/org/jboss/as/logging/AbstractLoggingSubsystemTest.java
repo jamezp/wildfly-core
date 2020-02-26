@@ -550,8 +550,8 @@ public abstract class AbstractLoggingSubsystemTest extends AbstractSubsystemBase
     }
 
 
-    static class RemoveOperationComparator implements Comparator<PathAddress> {
-        static final RemoveOperationComparator INSTANCE = new RemoveOperationComparator();
+    public static class RemoveOperationComparator implements Comparator<PathAddress> {
+        public static final RemoveOperationComparator INSTANCE = new RemoveOperationComparator();
         static final int GREATER = 1;
         static final int EQUAL = 0;
         static final int LESS = -1;

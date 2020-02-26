@@ -107,6 +107,7 @@
             ${surefire.jpda.args} ${surefire.jacoco.args}
         </surefire.system.args>
         <test.level>INFO</test.level>
+        <testLogToFile>true</testLogToFile>
 
         <!-- Non-default maven plugin versions and configuration -->
         <version.jacoco.plugin>0.8.0</version.jacoco.plugin>
@@ -315,7 +316,7 @@
                         </dependency>
                     </dependencies>
                     <configuration>
-                        <redirectTestOutputToFile>true</redirectTestOutputToFile>
+                        <redirectTestOutputToFile>${testLogToFile}</redirectTestOutputToFile>
                         <enableAssertions>true</enableAssertions>
                         <systemPropertyVariables>
                             <org.jboss.model.test.cache.root>${org.jboss.model.test.cache.root}</org.jboss.model.test.cache.root>

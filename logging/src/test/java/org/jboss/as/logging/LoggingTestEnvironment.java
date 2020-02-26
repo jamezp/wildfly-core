@@ -46,7 +46,7 @@ import org.wildfly.security.manager.WildFlySecurityManager;
  *
  * @author <a href="mailto:jperkins@redhat.com">James R. Perkins</a>
  */
-class LoggingTestEnvironment extends AdditionalInitialization implements Serializable {
+public class LoggingTestEnvironment extends AdditionalInitialization implements Serializable {
 
     private static final long serialVersionUID = 1L;
     private static final LoggingTestEnvironment INSTANCE;
@@ -74,7 +74,7 @@ class LoggingTestEnvironment extends AdditionalInitialization implements Seriali
         return INSTANCE;
     }
 
-    static LoggingTestEnvironment getManagementInstance() {
+    public static LoggingTestEnvironment getManagementInstance() {
         return MANAGEMENT_INSTANCE;
     }
 
