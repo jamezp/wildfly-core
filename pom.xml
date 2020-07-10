@@ -1404,6 +1404,13 @@
                 <groupId>org.wildfly.core</groupId>
                 <artifactId>wildfly-jar-boot</artifactId>
                 <version>${project.version}</version>
+                <!-- TODO (jrp) document why this is required -->
+                <exclusions>
+                    <exclusion>
+                        <groupId>*</groupId>
+                        <artifactId>*</artifactId>
+                    </exclusion>
+                </exclusions>
             </dependency>
             <dependency>
                 <groupId>org.wildfly.core</groupId>

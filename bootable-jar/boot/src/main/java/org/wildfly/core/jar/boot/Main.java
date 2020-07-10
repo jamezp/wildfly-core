@@ -75,6 +75,8 @@ public final class Main {
             }
             unzip(wf, installDir.toFile());
         }
+        // Bootstrap the log manager
+        LogManagerConfigurator.bootstrap(installDir);
         runBootableJar(installDir, filteredArgs, System.currentTimeMillis() - t);
     }
 

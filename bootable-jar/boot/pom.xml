@@ -36,6 +36,29 @@
             <groupId>org.jboss.modules</groupId>
             <artifactId>jboss-modules</artifactId>
         </dependency>
+        <!--
+            We want to shade in the log manager and it's dependencies. The reason for this is if the bootable JAR uses
+            an agent we want to set the log manager early and including the log manager avoids funkiness with the boot
+            class path. All that would need to be done is the -Djava.util.logging.manager=org.jboss.logmanager.LogManager
+            system property would need to be set.
+        -->
+        <dependency>
+            <groupId>jakarta.json</groupId>
+            <artifactId>jakarta.json-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.glassfish</groupId>
+            <artifactId>jakarta.json</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.jboss.logmanager</groupId>
+            <artifactId>jboss-logmanager</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.wildfly.common</groupId>
+            <artifactId>wildfly-common</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>

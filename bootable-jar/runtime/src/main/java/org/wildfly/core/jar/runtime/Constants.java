@@ -22,9 +22,6 @@ package org.wildfly.core.jar.runtime;
  */
 interface Constants {
 
-    static final String JBOSS_SERVER_CONFIG_DIR = "jboss.server.config.dir";
-    static final String JBOSS_SERVER_LOG_DIR = "jboss.server.log.dir";
-
     static final String DEPLOYMENT_ARG = "--deployment";
     static final String INSTALL_DIR_ARG = "--install-dir";
 
@@ -34,15 +31,7 @@ interface Constants {
     static final String DEPLOYMENTS = "deployments";
     static final String STANDALONE_CONFIG = "standalone.xml";
     static final String STANDALONE = "standalone";
-    static final String LOG = "log";
 
-    static final String LOG_MANAGER_PROP = "java.util.logging.manager";
-    static final String LOG_MANAGER_CLASS = "org.jboss.logmanager.LogManager";
-    static final String LOG_BOOT_FILE_PROP = "org.jboss.boot.log.file";
-    static final String LOG_EMBEDDED_PROP = "org.wildfly.logging.embedded";
-    static final String LOGGING_PROPERTIES = "logging.properties";
-
-    static final String SERVER_LOG = "server.log";
     static final String SERVER_STATE = "server-state";
     static final String STOPPED = "stopped";
 
