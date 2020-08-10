@@ -180,7 +180,9 @@ public class LoggingExtension implements Extension {
             // The logging subsystem requires JBoss Log Manager to be used. Note this can be overridden and may fail late
             // instead of early. The reason to allow for the comparison to be overridden is some environments may wrap
             // the log manager. As long as the delegate log manager is JBoss Log Manager we should be okay.
+            LoggingLogger.ROOT_LOGGER.warnf("%s=%s", SKIP_LOG_MANAGER_PROPERTY, System.getProperty(SKIP_LOG_MANAGER_PROPERTY));
             if (getBooleanProperty(SKIP_LOG_MANAGER_PROPERTY, false)) {
+                LoggingLogger.ROOT_LOGGER.warnf("System property %s was set to true. Skipping the log manager check.", SKIP_LOG_MANAGER_PROPERTY);
                 LoggingLogger.ROOT_LOGGER.debugf("System property %s was set to true. Skipping the log manager check.", SKIP_LOG_MANAGER_PROPERTY);
                 // Since we're overriding we will check the log manager system property and log a warning if the value is
                 // not org.jboss.logmanager.LogManager.
