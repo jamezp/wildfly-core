@@ -198,6 +198,7 @@ public final class BootableJar implements ShutdownHandler {
     }
 
     private void configureLogger() throws IOException {
+        System.out.printf("%s=%s%n", LOG_MANAGER_PROP, System.getProperty(LOG_MANAGER_PROP));
         System.setProperty(LOG_MANAGER_PROP, LOG_MANAGER_CLASS);
         configureLogging();
         log = BootableJarLogger.ROOT_LOGGER;
@@ -213,22 +214,27 @@ public final class BootableJar implements ShutdownHandler {
     }
 
     private LogContext configureLogContext() throws IOException {
+        System.out.println("Configuring log context");
         final Path baseDir = jbossHome.resolve(STANDALONE);
         String serverLogDir = System.getProperty(JBOSS_SERVER_LOG_DIR, null);
         if (serverLogDir == null) {
             serverLogDir = baseDir.resolve(LOG).toString();
             System.setProperty(JBOSS_SERVER_LOG_DIR, serverLogDir);
+            System.out.println("Server log set to " + serverLogDir);
         }
         final String serverCfgDir = System.getProperty(JBOSS_SERVER_CONFIG_DIR, baseDir.resolve(CONFIGURATION).toString());
         final LogContext embeddedLogContext = LogContext.create();
         final Path bootLog = Paths.get(serverLogDir).resolve(SERVER_LOG);
         final Path loggingProperties = Paths.get(serverCfgDir).resolve(Paths.get(LOGGING_PROPERTIES));
         if (Files.exists(loggingProperties)) {
+            System.out.println("Found logging properties " + loggingProperties);
             try (final InputStream in = Files.newInputStream(loggingProperties)) {
                 System.setProperty(LOG_BOOT_FILE_PROP, bootLog.toAbsolutePath().toString());
                 PropertyConfigurator configurator = new PropertyConfigurator(embeddedLogContext);
                 configurator.configure(in);
             }
+        } else {
+            System.out.println("Could not find logging.properties in " + serverCfgDir);
         }
         return embeddedLogContext;
     }
