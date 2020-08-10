@@ -18,11 +18,9 @@ package org.wildfly.core.jar.runtime;
 
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
@@ -46,15 +44,8 @@ import static org.jboss.as.controller.client.helpers.ClientConstants.RUNTIME_NAM
 import org.jboss.as.process.CommandLineConstants;
 import org.jboss.as.process.ExitCodes;
 import org.jboss.dmr.ModelNode;
-import org.jboss.logmanager.LogContext;
-import org.jboss.logmanager.PropertyConfigurator;
 import org.jboss.modules.ModuleClassLoader;
 import org.jboss.modules.ModuleLoader;
-import static org.wildfly.core.jar.runtime.Constants.JBOSS_SERVER_CONFIG_DIR;
-import static org.wildfly.core.jar.runtime.Constants.JBOSS_SERVER_LOG_DIR;
-import static org.wildfly.core.jar.runtime.Constants.LOG_BOOT_FILE_PROP;
-import static org.wildfly.core.jar.runtime.Constants.LOG_MANAGER_CLASS;
-import static org.wildfly.core.jar.runtime.Constants.LOG_MANAGER_PROP;
 import static org.wildfly.core.jar.runtime.Constants.STANDALONE;
 import static org.wildfly.core.jar.runtime.Constants.STANDALONE_CONFIG;
 import org.wildfly.core.jar.runtime._private.BootableJarLogger;
@@ -66,9 +57,6 @@ import org.w3c.dom.NodeList;
 import static org.wildfly.core.jar.runtime.Constants.CONFIGURATION;
 import static org.wildfly.core.jar.runtime.Constants.DATA;
 import static org.wildfly.core.jar.runtime.Constants.DEPLOYMENTS;
-import static org.wildfly.core.jar.runtime.Constants.LOG;
-import static org.wildfly.core.jar.runtime.Constants.LOGGING_PROPERTIES;
-import static org.wildfly.core.jar.runtime.Constants.SERVER_LOG;
 import static org.wildfly.core.jar.runtime.Constants.SERVER_STATE;
 import static org.wildfly.core.jar.runtime.Constants.SHA1;
 import static org.wildfly.core.jar.runtime.Constants.STOPPED;
@@ -198,45 +186,7 @@ public final class BootableJar implements ShutdownHandler {
     }
 
     private void configureLogger() throws IOException {
-        System.out.printf("%s=%s%n", LOG_MANAGER_PROP, System.getProperty(LOG_MANAGER_PROP));
-        System.setProperty(LOG_MANAGER_PROP, LOG_MANAGER_CLASS);
-        configureLogging();
         log = BootableJarLogger.ROOT_LOGGER;
-    }
-
-    private void configureLogging() throws IOException {
-        if (!arguments.isVersion()) {
-            LogContext ctx = configureLogContext();
-            LogContext.setLogContextSelector(() -> {
-                return ctx;
-            });
-        }
-    }
-
-    private LogContext configureLogContext() throws IOException {
-        System.out.println("Configuring log context");
-        final Path baseDir = jbossHome.resolve(STANDALONE);
-        String serverLogDir = System.getProperty(JBOSS_SERVER_LOG_DIR, null);
-        if (serverLogDir == null) {
-            serverLogDir = baseDir.resolve(LOG).toString();
-            System.setProperty(JBOSS_SERVER_LOG_DIR, serverLogDir);
-            System.out.println("Server log set to " + serverLogDir);
-        }
-        final String serverCfgDir = System.getProperty(JBOSS_SERVER_CONFIG_DIR, baseDir.resolve(CONFIGURATION).toString());
-        final LogContext embeddedLogContext = LogContext.create();
-        final Path bootLog = Paths.get(serverLogDir).resolve(SERVER_LOG);
-        final Path loggingProperties = Paths.get(serverCfgDir).resolve(Paths.get(LOGGING_PROPERTIES));
-        if (Files.exists(loggingProperties)) {
-            System.out.println("Found logging properties " + loggingProperties);
-            try (final InputStream in = Files.newInputStream(loggingProperties)) {
-                System.setProperty(LOG_BOOT_FILE_PROP, bootLog.toAbsolutePath().toString());
-                PropertyConfigurator configurator = new PropertyConfigurator(embeddedLogContext);
-                configurator.configure(in);
-            }
-        } else {
-            System.out.println("Could not find logging.properties in " + serverCfgDir);
-        }
-        return embeddedLogContext;
     }
 
     public void run() throws Exception {

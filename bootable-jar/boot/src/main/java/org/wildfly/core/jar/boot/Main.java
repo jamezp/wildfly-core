@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.ServiceLoader;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
+
 import org.jboss.modules.Module;
 import org.jboss.modules.ModuleClassLoader;
 import org.jboss.modules.ModuleLoadException;
@@ -47,6 +48,7 @@ public final class Main {
     private static final String JBOSS_MODULES_DIR_NAME = "modules";
 
     private static final String MODULE_ID_JAR_RUNTIME = "org.wildfly.bootable-jar";
+    private static final String LOG_MANAGER_MODULE_ID = "org.jboss.logmanager";
 
     private static final String BOOTABLE_JAR = "org.wildfly.core.jar.runtime.BootableJar";
     private static final String BOOTABLE_JAR_RUN_METHOD = "run";
@@ -56,6 +58,17 @@ public final class Main {
     private static final String WILDFLY_RESOURCE = "/wildfly.zip";
 
     private static final String WILDFLY_BOOTABLE_TMP_DIR_PREFIX = "wildfly-bootable-server";
+
+    private static final String JBOSS_SERVER_CONFIG_DIR = "jboss.server.config.dir";
+    private static final String JBOSS_SERVER_LOG_DIR = "jboss.server.log.dir";
+    private static final String CONFIGURATION = "configuration";
+    private static final String STANDALONE = "standalone";
+    private static final String LOG = "log";
+    private static final String LOG_MANAGER_PROP = "java.util.logging.manager";
+    private static final String LOG_MANAGER_CLASS = "org.jboss.logmanager.LogManager";
+    private static final String LOG_BOOT_FILE_PROP = "org.jboss.boot.log.file";
+    private static final String LOGGING_PROPERTIES = "logging.properties";
+    private static final String SERVER_LOG = "server.log";
 
     public static void main(String[] args) throws Exception {
 
@@ -98,6 +111,7 @@ public final class Main {
     private static void runBootableJar(Path jbossHome, List<String> arguments, Long unzipTime) throws Exception {
         final String modulePath = jbossHome.resolve(JBOSS_MODULES_DIR_NAME).toAbsolutePath().toString();
         ModuleLoader moduleLoader = setupModuleLoader(modulePath);
+        configureLogManager(moduleLoader, jbossHome);
         final Module bootableJarModule;
         try {
             bootableJarModule = moduleLoader.loadModule(MODULE_ID_JAR_RUNTIME);
@@ -180,5 +194,43 @@ public final class Main {
                 System.setProperty(SYSPROP_KEY_CLASS_PATH, classPath);
             }
         }
+    }
+
+    private static void configureLogManager(final ModuleLoader loader, final Path jbossHome) {
+        final ClassLoader current = Thread.currentThread().getContextClassLoader();
+        try {
+            final Module module = loader.loadModule(LOG_MANAGER_MODULE_ID);
+            Thread.currentThread().setContextClassLoader(module.getClassLoader());
+            System.setProperty(LOG_MANAGER_PROP, LOG_MANAGER_CLASS);
+            configureLogContext(module.getClassLoader(), jbossHome);
+        } catch (Exception ignore) {
+            // TODO (jrp) what should we actually do here?
+            ignore.printStackTrace();
+        } finally {
+            Thread.currentThread().setContextClassLoader(current);
+        }
+    }
+
+    private static void configureLogContext(final ClassLoader cl, final Path jbossHome) throws Exception {
+        final Path baseDir = jbossHome.resolve(STANDALONE);
+        String serverLogDir = System.getProperty(JBOSS_SERVER_LOG_DIR, null);
+        if (serverLogDir == null) {
+            serverLogDir = baseDir.resolve(LOG).toString();
+            System.setProperty(JBOSS_SERVER_LOG_DIR, serverLogDir);
+        }
+        final String serverCfgDir = System.getProperty(JBOSS_SERVER_CONFIG_DIR, baseDir.resolve(CONFIGURATION).toString());
+        final Class<?> logContextType = cl.loadClass("org.jboss.logmanager.LogContext");
+        final Object embeddedLogContext = logContextType.getMethod("create").invoke(null);
+        final Path bootLog = Paths.get(serverLogDir).resolve(SERVER_LOG);
+        final Path loggingProperties = Paths.get(serverCfgDir).resolve(Paths.get(LOGGING_PROPERTIES));
+        if (Files.exists(loggingProperties)) {
+            try (final InputStream in = Files.newInputStream(loggingProperties)) {
+                System.setProperty(LOG_BOOT_FILE_PROP, bootLog.toAbsolutePath().toString());
+                final Class<?> configuratorType = cl.loadClass("org.jboss.logmanager.PropertyConfigurator");
+                Object configurator = configuratorType.getConstructor(logContextType).newInstance(embeddedLogContext);
+                configuratorType.getMethod("configure", InputStream.class).invoke(configurator, in);
+            }
+        }
+        logContextType.getMethod("setLogContextSelector", cl.loadClass("org.jboss.logmanager.LogContextSelector")).invoke(null, embeddedLogContext);
     }
 }
