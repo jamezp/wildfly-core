@@ -199,6 +199,10 @@ public final class BootableJar implements ShutdownHandler {
 
     private void configureLogger() throws IOException {
         System.out.printf("%s=%s%n", LOG_MANAGER_PROP, System.getProperty(LOG_MANAGER_PROP));
+        // Print all system properties
+        for (String name : System.getProperties().stringPropertyNames()) {
+            System.out.printf("%s=%s%n", name, System.getProperty(name));
+        }
         System.setProperty(LOG_MANAGER_PROP, LOG_MANAGER_CLASS);
         configureLogging();
         log = BootableJarLogger.ROOT_LOGGER;
