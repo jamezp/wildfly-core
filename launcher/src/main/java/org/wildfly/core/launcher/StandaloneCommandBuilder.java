@@ -43,9 +43,6 @@ import org.wildfly.core.launcher.Arguments.Argument;
 @SuppressWarnings({"unused", "MagicNumber", "UnusedReturnValue"})
 public class StandaloneCommandBuilder extends AbstractCommandBuilder<StandaloneCommandBuilder> implements CommandBuilder {
 
-    // JPDA remote socket debugging
-    static final String DEBUG_FORMAT = "-agentlib:jdwp=transport=dt_socket,server=y,suspend=%s,address=%d";
-
     private static final String SERVER_BASE_DIR = "jboss.server.base.dir";
     private static final String SERVER_CONFIG_DIR = "jboss.server.config.dir";
     private static final String SERVER_LOG_DIR = "jboss.server.log.dir";
@@ -335,7 +332,7 @@ public class StandaloneCommandBuilder extends AbstractCommandBuilder<StandaloneC
      * @return the builder
      */
     public StandaloneCommandBuilder setDebug(final boolean suspend, final int port) {
-        debugArg = String.format(DEBUG_FORMAT, (suspend ? "y" : "n"), port);
+        debugArg = environment.getJvm().getDebugArgument(suspend, port);
         return this;
     }
 

@@ -79,7 +79,12 @@ public class CommandBuilderTest {
 
         Assert.assertTrue("Missing -b=0.0.0.0", commands.contains("-bmanagement=0.0.0.0"));
 
-        Assert.assertTrue("Missing debug argument", commands.contains(String.format(StandaloneCommandBuilder.DEBUG_FORMAT, "y", 5005)));
+        // Check the debug command
+        if (Jvm.current().isModular()) {
+            Assert.assertTrue("Missing debug argument", commands.contains("-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=*:5005"));
+        } else {
+            Assert.assertTrue("Missing debug argument", commands.contains("-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=5005"));
+        }
 
         Assert.assertTrue("Missing server configuration file override", commands.contains("-c=standalone-full.xml"));
 
@@ -131,7 +136,12 @@ public class CommandBuilderTest {
 
         Assert.assertTrue("Missing -b=0.0.0.0", commands.contains("-bmanagement=0.0.0.0"));
 
-        Assert.assertTrue("Missing debug argument", commands.contains(String.format(StandaloneCommandBuilder.DEBUG_FORMAT, "y", 5005)));
+        // Check the debug command
+        if (Jvm.current().isModular()) {
+            Assert.assertTrue("Missing debug argument", commands.contains("-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=*:5005"));
+        } else {
+            Assert.assertTrue("Missing debug argument", commands.contains("-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=5005"));
+        }
 
         // If we're using Java 9+ ensure the modular JDK options were added
         testModularJvmArguments(commands, 1);

@@ -31,7 +31,6 @@ import static org.wildfly.core.launcher.AbstractCommandBuilder.DEFAULT_MODULAR_V
 import static org.wildfly.core.launcher.AbstractCommandBuilder.DEFAULT_VM_ARGUMENTS;
 
 import org.wildfly.core.launcher.Arguments.Argument;
-import static org.wildfly.core.launcher.StandaloneCommandBuilder.DEBUG_FORMAT;
 import org.wildfly.core.launcher.logger.LauncherMessages;
 
 /**
@@ -349,7 +348,7 @@ public class BootableJarCommandBuilder implements CommandBuilder {
      * @return the builder
      */
     public BootableJarCommandBuilder setDebug(final boolean suspend, final int port) {
-        debugArg = String.format(DEBUG_FORMAT, (suspend ? "y" : "n"), port);
+        debugArg = jvm.getDebugArgument(suspend, port);
         return this;
     }
 

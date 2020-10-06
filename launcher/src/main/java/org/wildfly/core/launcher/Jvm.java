@@ -71,10 +71,16 @@ class Jvm {
 
     private final Path path;
     private final boolean isModular;
+    private final String debugFormat;
 
     private Jvm(final Path path, final boolean isModular) {
         this.path = path;
         this.isModular = isModular;
+        if (isModular) {
+            debugFormat = "-agentlib:jdwp=transport=dt_socket,server=y,suspend=%s,address=*:%d";
+        } else {
+            debugFormat = "-agentlib:jdwp=transport=dt_socket,server=y,suspend=%s,address=%d";
+        }
     }
 
     /**
@@ -140,6 +146,18 @@ class Jvm {
      */
     public boolean isModular() {
         return isModular;
+    }
+
+    /**
+     * Returns the debug argument for the JVM.
+     *
+     * @param suspend {@code true} if the debug agent should suspend until a debugger is connected
+     * @param port    the port the debugger should bind to
+     *
+     * @return the debug argument
+     */
+    public String getDebugArgument(final boolean suspend, final int port) {
+        return String.format(debugFormat, (suspend ? "y" : "n"), port);
     }
 
 
