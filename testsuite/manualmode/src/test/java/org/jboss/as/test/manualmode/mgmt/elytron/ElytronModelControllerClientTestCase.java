@@ -77,7 +77,7 @@ public class ElytronModelControllerClientTestCase {
         // Start the server
         CONTROLLER.start(copiedConfig.getFileName().toString(), WILDFLY_CONFIG.toURI());
 
-        testConnection();
+        testConnection("test-admin");
 
         // Stop the container, then remove the copied config
         CONTROLLER.stop();
@@ -89,7 +89,7 @@ public class ElytronModelControllerClientTestCase {
         // Start the server
         CONTROLLER.start();
 
-        testConnection();
+        testConnection("$local");
 
         // Stop the container
         CONTROLLER.stop();
@@ -97,7 +97,7 @@ public class ElytronModelControllerClientTestCase {
 
     @Test
     public void testDefaultClient_AuthenticationConfiguration() throws Exception {
-        // The AuthenticationConfiguration being established will deliberatly not work.
+        // The AuthenticationConfiguration being established will deliberately not work.
         AuthenticationConfiguration configuration = AuthenticationConfiguration.empty().usePrincipal(new NamePrincipal("bad"))
                 .usePassword("bad").useRealm("bad");
 
@@ -107,7 +107,7 @@ public class ElytronModelControllerClientTestCase {
             // Start the server - this form of the start() method uses a CallbackHandler to supply the clients details.
             CONTROLLER.start();
 
-            testConnection();
+            testConnection("$local");
 
             // Stop the container
             CONTROLLER.stop();
@@ -116,13 +116,16 @@ public class ElytronModelControllerClientTestCase {
         });
     }
 
-    private void testConnection() throws IOException {
+    private void testConnection(final String expectedUser) throws IOException {
 
-        final ModelNode op = Operations.createReadAttributeOperation(new ModelNode().setEmptyList(), "server-state");
+        final ModelNode op = Operations.createOperation("whoami");
         ModelNode result = CONTROLLER.getClient().getControllerClient().execute(op);
         if (!Operations.isSuccessfulOutcome(result)) {
             Assert.fail(Operations.getFailureDescription(result).asString());
         }
+        final ModelNode identity = Operations.readResult(result);
+        final String user = identity.get("identity", "username").asString();
+        Assert.assertEquals(String.format("Expected user %s got %s", expectedUser, user), expectedUser, user);
     }
 
     private Path configureElytron() throws Exception {
