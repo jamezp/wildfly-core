@@ -37,7 +37,6 @@
     </exports>
 
     <resources>
-        <resource-root path="lib"/>
         <artifact name="${org.wildfly.security:wildfly-elytron-asn1}"/>
         <artifact name="${org.wildfly.security:wildfly-elytron-audit}"/>
         <artifact name="${org.wildfly.security:wildfly-elytron-auth}"/>

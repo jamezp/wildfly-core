@@ -30,13 +30,9 @@
 
     <resources>
         <artifact name="${jakarta.json:jakarta.json-api}"/>
+        <artifact name="${org.apache.johnzon:johnzon-core}"/>
     </resources>
-    <provides>
-        <service name="javax.json.spi.JsonProvider">
-            <with-class name="org.apache.johnzon.core.JsonProviderImpl"></with-class>
-        </service>
-    </provides>
     <dependencies>
-        <module name="org.apache.johnzon" export="true" services="export"/>
+        <module name="java.logging"/>
     </dependencies>
 </module>
