@@ -43,6 +43,7 @@
         <module name="java.naming"/>
         <module name="java.security.sasl"/>
         <module name="java.xml"/>
+        <module name="javax.json.api" services="import"/>
         <!-- Workaround for ELY-1561 -->
         <module name="jdk.security.auth"/>
         <!--this needs to remain here until common-beans is fixed to use passed classloader -->

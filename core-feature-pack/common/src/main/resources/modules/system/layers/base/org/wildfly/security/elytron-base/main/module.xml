@@ -37,6 +37,7 @@
     </exports>
 
     <resources>
+        <resource-root path="lib"/>
         <artifact name="${org.wildfly.security:wildfly-elytron-asn1}"/>
         <artifact name="${org.wildfly.security:wildfly-elytron-audit}"/>
         <artifact name="${org.wildfly.security:wildfly-elytron-auth}"/>
@@ -109,7 +110,7 @@
         <module name="java.security.sasl"/>
         <module name="java.sql"/>
         <module name="java.xml"/>
-        <module name="javax.json.api"/>
+        <module name="javax.json.api" services="import"/>
         <module name="jdk.security.auth"/>
         <module name="jdk.unsupported"/>
         <module name="org.jboss.logging"/>

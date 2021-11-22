@@ -176,6 +176,7 @@
              (the current workaround causes test failures in domain-management tests).
              Cannot bump to AM25 due to https://issues.apache.org/jira/browse/DIRSERVER-2247.
         -->
+        <version.org.apache.johnzon>1.2.15</version.org.apache.johnzon>
         <version.org.apache.httpcomponents.httpclient>4.5.13</version.org.apache.httpcomponents.httpclient>
         <version.org.apache.httpcomponents.httpcore>4.4.14</version.org.apache.httpcomponents.httpcore>
         <version.org.apache.logging.log4j>2.14.1</version.org.apache.logging.log4j>
@@ -962,10 +963,16 @@
             </dependency>
             <!-- JSR-353 JSONP RI implementation -->
             <!-- used by elytron audit logging -->
+            
             <dependency>
                 <groupId>org.glassfish</groupId>
                 <artifactId>jakarta.json</artifactId>
                 <version>${version.org.glassfish.jakarta.json}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.johnzon</groupId>
+                <artifactId>johnzon-core</artifactId>
+                <version>${version.org.apache.johnzon}</version>
             </dependency>
             <dependency>
                 <groupId>org.jboss</groupId>

@@ -39,10 +39,9 @@
     <dependencies>
 
         <!-- module and copy artifact dependencies -->
-
         <dependency>
-            <groupId>org.glassfish</groupId>
-            <artifactId>jakarta.json</artifactId>
+            <groupId>org.apache.johnzon</groupId>
+            <artifactId>johnzon-core</artifactId>
             <exclusions>
                 <exclusion>
                     <groupId>*</groupId>

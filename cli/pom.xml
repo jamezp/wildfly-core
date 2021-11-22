@@ -229,8 +229,8 @@
             <artifactId>jboss-stdio</artifactId>
         </dependency>
         <dependency>
-            <groupId>org.glassfish</groupId>
-            <artifactId>jakarta.json</artifactId>
+            <groupId>org.apache.johnzon</groupId>
+            <artifactId>johnzon-core</artifactId>
         </dependency>
 
         <!-- Test Dependencies -->

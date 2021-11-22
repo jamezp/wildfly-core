@@ -29,6 +29,6 @@
     </resources>
 
     <dependencies>
-        <module name="javax.json.api"/>
+        <module name="javax.json.api" services="import"/>
     </dependencies>
 </module>

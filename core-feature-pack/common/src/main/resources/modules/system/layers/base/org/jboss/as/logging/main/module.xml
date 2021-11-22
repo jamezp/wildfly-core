@@ -39,6 +39,7 @@
     <dependencies>
         <module name="java.logging"/>
         <module name="java.xml"/>
+        <module name="javax.json.api" services="import"/>
         <module name="org.apache.log4j"/>
         <module name="org.jboss.as.controller"/>
         <module name="org.wildfly.security.elytron-private"/>
