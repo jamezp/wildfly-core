@@ -53,7 +53,7 @@ abstract class AbstractFileHandlerDefinition extends AbstractHandlerDefinition {
                                   final ResolvePathHandler resolvePathHandler,
                                   final PathInfoHandler diskUsagePathHandler,
                                   final AttributeDefinition... attributes) {
-        super(createParameters(path, type, attributes, CommonAttributes.FILE, CommonAttributes.APPEND), registerLegacyOps, null, attributes);
+        super(createParameters(path, type, attributes, CommonAttributes.FILE, CommonAttributes.APPEND), registerLegacyOps, (AttributeDefinition[]) null, attributes);
         this.registerLegacyOps = registerLegacyOps;
         this.resolvePathHandler = resolvePathHandler;
         this.diskUsagePathHandler = diskUsagePathHandler;

@@ -22,7 +22,10 @@ package org.jboss.as.logging.capabilities;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.logging.Filter;
+import java.util.logging.Formatter;
 import java.util.logging.Handler;
+import java.util.logging.Logger;
 
 import org.jboss.as.controller.CapabilityReferenceRecorder;
 import org.jboss.as.controller.capability.RuntimeCapability;
@@ -60,14 +63,14 @@ public class Capabilities {
     /**
      * A capability for logging filter.
      */
-    public static final RuntimeCapability<Void> FILTER_CAPABILITY = RuntimeCapability.Builder.of("org.wildfly.logging.filter", true)
+    public static final RuntimeCapability<Void> FILTER_CAPABILITY = RuntimeCapability.Builder.of("org.wildfly.logging.filter", true, Filter.class)
             .setDynamicNameMapper(LoggingProfileNameMapper.INSTANCE)
             .build();
 
     /**
      * A capability for logging formatters.
      */
-    public static final RuntimeCapability<Void> FORMATTER_CAPABILITY = RuntimeCapability.Builder.of("org.wildfly.logging.formatter", true)
+    public static final RuntimeCapability<Void> FORMATTER_CAPABILITY = RuntimeCapability.Builder.of("org.wildfly.logging.formatter", true, Formatter.class)
             .setDynamicNameMapper(LoggingProfileNameMapper.INSTANCE)
             .build();
 
@@ -85,7 +88,7 @@ public class Capabilities {
     /**
      * A capability for loggers.
      */
-    public static final RuntimeCapability<Void> LOGGER_CAPABILITY = RuntimeCapability.Builder.of("org.wildfly.logging.logger", true)
+    public static final RuntimeCapability<Void> LOGGER_CAPABILITY = RuntimeCapability.Builder.of("org.wildfly.logging.logger", true, Logger.class)
             .setDynamicNameMapper(LoggingProfileNameMapper.INSTANCE)
             .build();
 

@@ -217,7 +217,7 @@ public class HandlerOperationsTestCase extends AbstractOperationsTestCase {
     public void testCompositeOperations() {
         final ModelNode address = createFileHandlerAddress("FILE").toModelNode();
         final String filename = "test-file.log";
-        final String defaultFormatterName = PatternFormatterResourceDefinition.getDefaultFomatterName("FILE");
+        final String defaultFormatterName = PatternFormatterResourceDefinition.getDefaultFormatterName("FILE");
 
         // Add the handler
         ModelNode addOp = OperationBuilder.createAddOperation(address)
@@ -686,7 +686,7 @@ public class HandlerOperationsTestCase extends AbstractOperationsTestCase {
         super.verifyRemoved(kernelServices, address);
         final LogContextConfiguration configuration = ConfigurationPersistence.getConfigurationPersistence(LogContext.getLogContext());
         final String name = address.get(address.asInt() - 1).asProperty().getValue().asString();
-        final String defaultFormatterName = PatternFormatterResourceDefinition.getDefaultFomatterName(name);
+        final String defaultFormatterName = PatternFormatterResourceDefinition.getDefaultFormatterName(name);
         assertFalse("Expected the default formatter named " + defaultFormatterName + " to be removed for the handler " + name,
                 configuration.getFormatterNames().contains(defaultFormatterName));
     }

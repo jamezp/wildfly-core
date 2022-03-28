@@ -131,14 +131,14 @@ public abstract class AbstractHandlerDefinition extends TransformerResourceDefin
     protected AbstractHandlerDefinition(final PathElement path,
                                         final Class<? extends Handler> type,
                                         final AttributeDefinition[] attributes) {
-        this(createParameters(path, type, attributes), true, null, attributes);
+        this(createParameters(path, type, attributes), true, (AttributeDefinition[]) null, attributes);
     }
 
     protected AbstractHandlerDefinition(final PathElement path,
                                         final boolean registerLegacyOps,
                                         final Class<? extends Handler> type,
                                         final AttributeDefinition[] attributes) {
-        this(createParameters(path, type, attributes), registerLegacyOps, null, attributes);
+        this(createParameters(path, type, attributes), registerLegacyOps, (AttributeDefinition[]) null, attributes);
     }
 
     protected AbstractHandlerDefinition(final PathElement path,
@@ -146,7 +146,7 @@ public abstract class AbstractHandlerDefinition extends TransformerResourceDefin
                                         final AttributeDefinition[] attributes,
                                         final ConfigurationProperty<?>... constructionProperties) {
         this(createParameters(path, type, attributes, constructionProperties),
-                true, null, attributes);
+                true, (AttributeDefinition[]) null, attributes);
     }
 
     protected AbstractHandlerDefinition(final Parameters parameters,
@@ -157,6 +157,17 @@ public abstract class AbstractHandlerDefinition extends TransformerResourceDefin
         this.registerLegacyOps = registerLegacyOps;
         this.writableAttributes = writableAttributes;
         writeHandler = new HandlerOperations.LogHandlerWriteAttributeHandler(this.writableAttributes);
+        this.readOnlyAttributes = readOnlyAttributes;
+    }
+
+    protected AbstractHandlerDefinition(final Parameters parameters,
+                                        final boolean registerLegacyOps,
+                                        final AbstractHandlerWriteOperationStepHandler<?> writeHandler,
+                                        final AttributeDefinition[] readOnlyAttributes) {
+        super(parameters);
+        this.registerLegacyOps = registerLegacyOps;
+        this.writeHandler = writeHandler;
+        writableAttributes = writeHandler.getAttributes();
         this.readOnlyAttributes = readOnlyAttributes;
     }
 

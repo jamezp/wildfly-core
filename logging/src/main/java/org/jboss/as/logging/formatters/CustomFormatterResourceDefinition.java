@@ -24,24 +24,30 @@ import static org.jboss.as.logging.CommonAttributes.MODULE;
 import static org.jboss.as.logging.CommonAttributes.PROPERTIES;
 import static org.jboss.as.logging.Logging.createOperationFailure;
 
-import java.util.List;
+import java.lang.reflect.InvocationTargetException;
+import java.util.function.Consumer;
+import java.util.logging.Formatter;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamWriter;
 
+import org.jboss.as.controller.AbstractAddStepHandler;
+import org.jboss.as.controller.AbstractWriteAttributeHandler;
 import org.jboss.as.controller.AttributeDefinition;
+import org.jboss.as.controller.CapabilityServiceBuilder;
+import org.jboss.as.controller.CapabilityServiceTarget;
 import org.jboss.as.controller.DefaultAttributeMarshaller;
 import org.jboss.as.controller.ObjectTypeAttributeDefinition;
 import org.jboss.as.controller.OperationContext;
 import org.jboss.as.controller.OperationFailedException;
 import org.jboss.as.controller.OperationStepHandler;
-import org.jboss.as.controller.PathAddress;
 import org.jboss.as.controller.PathElement;
 import org.jboss.as.controller.registry.ManagementResourceRegistration;
+import org.jboss.as.controller.registry.Resource;
 import org.jboss.as.controller.transform.description.ResourceTransformationDescriptionBuilder;
 import org.jboss.as.logging.KnownModelVersion;
 import org.jboss.as.logging.LoggingExtension;
 import org.jboss.as.logging.LoggingOperations;
-import org.jboss.as.logging.LoggingOperations.LoggingWriteAttributeHandler;
+import org.jboss.as.logging.Reflection;
 import org.jboss.as.logging.TransformerResourceDefinition;
 import org.jboss.as.logging.capabilities.Capabilities;
 import org.jboss.as.logging.logging.LoggingLogger;
@@ -49,6 +55,11 @@ import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.Property;
 import org.jboss.logmanager.config.FormatterConfiguration;
 import org.jboss.logmanager.config.LogContextConfiguration;
+import org.jboss.modules.ModuleLoadException;
+import org.jboss.msc.Service;
+import org.jboss.msc.service.StartContext;
+import org.jboss.msc.service.StartException;
+import org.jboss.msc.service.StopContext;
 
 /**
  * @author <a href="mailto:jperkins@redhat.com">James R. Perkins</a>
@@ -92,57 +103,95 @@ public class CustomFormatterResourceDefinition extends TransformerResourceDefini
     /**
      * A step handler to add a custom formatter
      */
-    private static final OperationStepHandler ADD = new LoggingOperations.LoggingAddOperationStepHandler(ATTRIBUTES) {
-
+    private static final OperationStepHandler ADD = new AbstractAddStepHandler(ATTRIBUTES) {
         @Override
-        public void performRuntime(final OperationContext context, final ModelNode operation, final ModelNode model, final LogContextConfiguration logContextConfiguration) throws OperationFailedException {
-            final String name = context.getCurrentAddressValue();
-            FormatterConfiguration configuration = logContextConfiguration.getFormatterConfiguration(name);
+        protected void performRuntime(final OperationContext context, final ModelNode operation, final ModelNode model) throws OperationFailedException {
             final String className = CLASS.resolveModelAttribute(context, model).asString();
             final ModelNode moduleNameNode = MODULE.resolveModelAttribute(context, model);
-            final String moduleName = moduleNameNode.isDefined() ? moduleNameNode.asString() : null;
+            // TODO (jrp) is this right?
+            final String moduleName = moduleNameNode.isDefined() ? moduleNameNode.asString() : "org.jboss.as.logging";
             final ModelNode properties = PROPERTIES.resolveModelAttribute(context, model);
-            if (configuration != null) {
-                if (!className.equals(configuration.getClassName()) || (moduleName == null ? configuration.getModuleName() != null : !moduleName.equals(configuration.getModuleName()))) {
-                    LoggingLogger.ROOT_LOGGER.tracef("Replacing formatter '%s' at '%s'", name, context.getCurrentAddress());
-                    logContextConfiguration.removeFormatterConfiguration(name);
-                    configuration = logContextConfiguration.addFormatterConfiguration(moduleName, className, name);
-                }
-            } else {
-                LoggingLogger.ROOT_LOGGER.tracef("Adding formatter '%s' at '%s'", name, context.getCurrentAddress());
-                configuration = logContextConfiguration.addFormatterConfiguration(moduleName, className, name);
-            }
-            if (properties.isDefined()) {
-                for (Property property : properties.asPropertyList()) {
-                    configuration.setPropertyValueString(property.getName(), property.getValue().asString());
-                }
-            }
+
+            final CapabilityServiceTarget target = context.getCapabilityServiceTarget();
+            final CapabilityServiceBuilder<?> builder = target.addCapability(Capabilities.FORMATTER_CAPABILITY);
+            final Consumer<Formatter> formatterConsumer = builder.provides(Capabilities.FORMATTER_CAPABILITY);
+
+            builder.setInstance(new Service() {
+                        @Override
+                        public void start(final StartContext context) throws StartException {
+                            try {
+                                final Formatter formatter = Reflection.createInstance(Formatter.class, moduleName, className);
+                                if (properties.isDefined()) {
+                                    for (Property property : properties.asPropertyList()) {
+                                        Reflection.setProperty(formatter, property.getName(), property.getValue()
+                                                .asString());
+                                    }
+                                }
+                                formatterConsumer.accept(formatter);
+                            } catch (ModuleLoadException | ClassNotFoundException | NoSuchMethodException |
+                                    InvocationTargetException | InstantiationException | IllegalAccessException e) {
+                                // TODO (jrp) i18n
+                                throw new StartException(e);
+                            }
+                        }
+
+                        @Override
+                        public void stop(final StopContext context) {
+                            formatterConsumer.accept(null);
+                        }
+                    })
+                    .install();
+        }
+
+        @Override
+        protected void rollbackRuntime(final OperationContext context, final ModelNode operation, final Resource resource) {
+            // TODO (jrp) implement this
+            super.rollbackRuntime(context, operation, resource);
         }
     };
 
-    private static final OperationStepHandler WRITE = new LoggingWriteAttributeHandler(ATTRIBUTES) {
+    private static final OperationStepHandler WRITE = new AbstractWriteAttributeHandler<Formatter>(ATTRIBUTES) {
 
         @Override
-        protected boolean applyUpdate(final OperationContext context, final String attributeName, final String addressName, final ModelNode value, final LogContextConfiguration logContextConfiguration) throws OperationFailedException {
-            final FormatterConfiguration configuration = logContextConfiguration.getFormatterConfiguration(addressName);
-            String modelClass = CLASS.resolveModelAttribute(context, context.readResource(PathAddress.EMPTY_ADDRESS).getModel()).asString();
-            if (PROPERTIES.getName().equals(attributeName) && configuration.getClassName().equals(modelClass)) {
-                if (value.isDefined()) {
-                    for (Property property : value.asPropertyList()) {
-                        configuration.setPropertyValueString(property.getName(), property.getValue().asString());
+        protected boolean applyUpdateToRuntime(final OperationContext context, final ModelNode operation, final String attributeName, final ModelNode resolvedValue, final ModelNode currentValue, final HandbackHolder<Formatter> handbackHolder) throws OperationFailedException {
+            if (PROPERTIES.getName().equals(attributeName)) {
+                final Formatter formatter = (Formatter) context.getServiceRegistry(true)
+                        .getRequiredService(Capabilities.FORMATTER_CAPABILITY.getCapabilityServiceName(context.getCurrentAddressValue(), Formatter.class))
+                        .getService().getValue();
+                if (resolvedValue.isDefined()) {
+                    for (Property property : resolvedValue.asPropertyList()) {
+                        Reflection.setProperty(formatter, property.getName(), property.getValue()
+                                .asString());
                     }
                 } else {
                     // Remove all current properties
-                    final List<String> names = configuration.getPropertyNames();
-                    for (String name : names) {
-                        configuration.removeProperty(name);
+                    for (Property property : currentValue.asPropertyList()) {
+                        Reflection.removeProperty(formatter, property.getName());
                     }
                 }
             }
-
-            // Writing a class attribute or module will require the previous formatter to be removed and a new formatter
-            // added. It's best to require a restart.
             return CLASS.getName().equals(attributeName) || MODULE.getName().equals(attributeName);
+        }
+
+        @Override
+        protected void revertUpdateToRuntime(final OperationContext context, final ModelNode operation, final String attributeName, final ModelNode valueToRestore, final ModelNode valueToRevert, final Formatter handback) throws OperationFailedException {
+            if (PROPERTIES.getName().equals(attributeName)) {
+                final Formatter formatter = (Formatter) context.getServiceRegistry(true)
+                        .getRequiredService(Capabilities.FORMATTER_CAPABILITY.getCapabilityServiceName(context.getCurrentAddressValue(), Formatter.class))
+                        .getService().getValue();
+                if (valueToRestore.isDefined()) {
+                    for (Property property : valueToRestore.asPropertyList()) {
+                        Reflection.setProperty(formatter, property.getName(), property.getValue()
+                                .asString());
+                    }
+                } else if (valueToRevert.isDefined()) {
+                    // Reset all current properties
+                    for (Property property : valueToRevert.asPropertyList()) {
+                        Reflection.setProperty(formatter, property.getName(), property.getValue()
+                                .asString());
+                    }
+                }
+            }
         }
     };
 

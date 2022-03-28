@@ -21,10 +21,15 @@ package org.jboss.as.logging.formatters;
 
 import static org.jboss.as.logging.Logging.createOperationFailure;
 
+import java.util.function.Consumer;
+import java.util.logging.Formatter;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamWriter;
 
+import org.jboss.as.controller.AbstractAddStepHandler;
 import org.jboss.as.controller.AttributeDefinition;
+import org.jboss.as.controller.CapabilityServiceBuilder;
+import org.jboss.as.controller.CapabilityServiceTarget;
 import org.jboss.as.controller.DefaultAttributeMarshaller;
 import org.jboss.as.controller.ObjectTypeAttributeDefinition;
 import org.jboss.as.controller.OperationContext;
@@ -32,6 +37,7 @@ import org.jboss.as.controller.OperationFailedException;
 import org.jboss.as.controller.OperationStepHandler;
 import org.jboss.as.controller.PathElement;
 import org.jboss.as.controller.registry.ManagementResourceRegistration;
+import org.jboss.as.controller.registry.Resource;
 import org.jboss.as.controller.transform.description.ResourceTransformationDescriptionBuilder;
 import org.jboss.as.logging.KnownModelVersion;
 import org.jboss.as.logging.LoggingExtension;
@@ -47,6 +53,9 @@ import org.jboss.dmr.ModelType;
 import org.jboss.logmanager.config.FormatterConfiguration;
 import org.jboss.logmanager.config.LogContextConfiguration;
 import org.jboss.logmanager.formatters.PatternFormatter;
+import org.jboss.msc.Service;
+import org.jboss.msc.service.StartContext;
+import org.jboss.msc.service.StopContext;
 
 /**
  * @author <a href="mailto:jperkins@redhat.com">James R. Perkins</a>
@@ -59,7 +68,7 @@ public class PatternFormatterResourceDefinition extends TransformerResourceDefin
 
     public static final String DEFAULT_FORMATTER_SUFFIX = "-wfcore-pattern-formatter";
 
-    public static String getDefaultFomatterName(String name) {
+    public static String getDefaultFormatterName(String name) {
         return name + DEFAULT_FORMATTER_SUFFIX;
     }
 
@@ -113,23 +122,45 @@ public class PatternFormatterResourceDefinition extends TransformerResourceDefin
     /**
      * A step handler to add a pattern formatter
      */
-    private static final OperationStepHandler ADD = new LoggingOperations.LoggingAddOperationStepHandler(ATTRIBUTES) {
-
+    private static final OperationStepHandler ADD = new AbstractAddStepHandler(ATTRIBUTES) {
         @Override
-        public void performRuntime(final OperationContext context, final ModelNode operation, final ModelNode model, final LogContextConfiguration logContextConfiguration) throws OperationFailedException {
+        protected void performRuntime(final OperationContext context, final ModelNode operation, final ModelNode model) throws OperationFailedException {
             final String name = context.getCurrentAddressValue();
             if (name.endsWith(DEFAULT_FORMATTER_SUFFIX)) {
                 throw LoggingLogger.ROOT_LOGGER.illegalFormatterName();
             }
-            FormatterConfiguration configuration = logContextConfiguration.getFormatterConfiguration(name);
-            if (configuration == null) {
-                LoggingLogger.ROOT_LOGGER.tracef("Adding formatter '%s' at '%s'", name, context.getCurrentAddress());
-                configuration = logContextConfiguration.addFormatterConfiguration(null, PatternFormatter.class.getName(), name);
-            }
+            LoggingLogger.ROOT_LOGGER.tracef("Adding formatter '%s' at '%s'", name, context.getCurrentAddress());
+            final CapabilityServiceTarget target = context.getCapabilityServiceTarget();
+            final CapabilityServiceBuilder<?> builder = target.addCapability(Capabilities.FORMATTER_CAPABILITY);
+            final Consumer<Formatter> formatterConsumer = builder.provides(Capabilities.FORMATTER_CAPABILITY);
 
-            for (PropertyAttributeDefinition attribute : ATTRIBUTES) {
-                attribute.setPropertyValue(context, model, configuration);
-            }
+            final String colorMap = COLOR_MAP.resolveModelAttribute(context, model).asString(null);
+            final String pattern = PATTERN.resolveModelAttribute(context, model).asString();
+
+            builder.setInstance(new Service() {
+                        @Override
+                        public void start(final StartContext context) {
+                            final PatternFormatter formatter;
+                            if (colorMap == null) {
+                                formatter = new PatternFormatter(pattern);
+                            } else {
+                                formatter = new PatternFormatter(pattern, colorMap);
+                            }
+                            formatterConsumer.accept(formatter);
+                        }
+
+                        @Override
+                        public void stop(final StopContext context) {
+                            formatterConsumer.accept(null);
+                        }
+                    })
+                    .install();
+        }
+
+        @Override
+        protected void rollbackRuntime(final OperationContext context, final ModelNode operation, final Resource resource) {
+            // TODO (jrp) what do we do here?
+            super.rollbackRuntime(context, operation, resource);
         }
     };
 
