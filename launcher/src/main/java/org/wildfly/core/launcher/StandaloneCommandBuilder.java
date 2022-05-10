@@ -24,6 +24,9 @@ package org.wildfly.core.launcher;
 import static org.wildfly.core.launcher.logger.LauncherMessages.MESSAGES;
 
 import java.io.File;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -71,7 +74,10 @@ public class StandaloneCommandBuilder extends AbstractCommandBuilder<StandaloneC
     private StandaloneCommandBuilder(final Path wildflyHome) {
         super(wildflyHome);
         javaOpts = new Arguments();
-        javaOpts.addAll(DEFAULT_VM_ARGUMENTS);
+        // TODO (jrp) need a better way to do this
+        if (Files.notExists(wildflyHome.resolve("bin").resolve("standalone.vmoptions"))) {
+            javaOpts.addAll(DEFAULT_VM_ARGUMENTS);
+        }
         securityProperties = new LinkedHashMap<>();
         moduleOpts = new ArrayList<>();
         addModuleAgent = false;
@@ -546,8 +552,18 @@ public class StandaloneCommandBuilder extends AbstractCommandBuilder<StandaloneC
             cmd.add("-javaagent:" + getModulesJarName());
         }
         cmd.addAll(getJavaOptions());
-        if (environment.getJvm().isModular()) {
-            cmd.addAll(DEFAULT_MODULAR_VM_ARGUMENTS);
+        final Path vmOptions = environment.resolvePath("bin", "standalone.vmoptions");
+        if (Files.exists(vmOptions)) {
+            try {
+                cmd.addAll(Files.readAllLines(vmOptions));
+            } catch (IOException e) {
+                // TODO (jrp) what do we really do here?
+                throw new UncheckedIOException(e);
+            }
+        } else {
+            if (environment.getJvm().isModular()) {
+                cmd.addAll(DEFAULT_MODULAR_VM_ARGUMENTS);
+            }
         }
         if (environment.getJvm().enhancedSecurityManagerAvailable()) {
             cmd.add(SECURITY_MANAGER_PROP_WITH_ALLOW_VALUE);
