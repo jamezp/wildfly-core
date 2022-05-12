@@ -175,6 +175,7 @@
         <version.com.jcraft.jsch>0.1.55</version.com.jcraft.jsch>
         <version.commons-cli>1.4</version.commons-cli>
         <version.commons-lang3>3.11</version.commons-lang3>
+        <version.io.smallrye.smallrye-common>1.11.0</version.io.smallrye.smallrye-common>
         <version.io.undertow>2.2.17.Final</version.io.undertow>
         <version.jakarta.inject.jakarta.inject-api>1.0.5</version.jakarta.inject.jakarta.inject-api>
         <version.jakarta.json.jakarta-json-api>1.1.6</version.jakarta.json.jakarta-json-api>
@@ -210,7 +211,7 @@
         <version.org.jboss.logging.jboss-logging>3.4.3.Final</version.org.jboss.logging.jboss-logging>
         <version.org.jboss.logging.jboss-logging-tools>2.2.1.Final</version.org.jboss.logging.jboss-logging-tools>
         <version.org.jboss.logging.jul-to-slf4j-stub>1.0.1.Final</version.org.jboss.logging.jul-to-slf4j-stub>
-        <version.org.jboss.logmanager.jboss-logmanager>2.1.18.Final</version.org.jboss.logmanager.jboss-logmanager>
+        <version.org.jboss.logmanager.jboss-logmanager>3.0.0.Final-SNAPSHOT</version.org.jboss.logmanager.jboss-logmanager>
         <version.org.jboss.logmanager.log4j-jboss-logmanager>1.3.0.Final</version.org.jboss.logmanager.log4j-jboss-logmanager>
         <version.org.jboss.logmanager.log4j2-jboss-logmanager>1.1.1.Final</version.org.jboss.logmanager.log4j2-jboss-logmanager>
         <version.org.jboss.marshalling.jboss-marshalling>2.0.12.Final</version.org.jboss.marshalling.jboss-marshalling>
@@ -835,6 +836,48 @@
                     </exclusion>
                 </exclusions>
             </dependency>
+
+            <dependency>
+                <groupId>io.smallrye.common</groupId>
+                <artifactId>smallrye-common-annotation</artifactId>
+                <version>${version.io.smallrye.smallrye-common}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.smallrye.common</groupId>
+                <artifactId>smallrye-common-constraint</artifactId>
+                <version>${version.io.smallrye.smallrye-common}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.smallrye.common</groupId>
+                <artifactId>smallrye-common-cpu</artifactId>
+                <version>${version.io.smallrye.smallrye-common}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.smallrye.common</groupId>
+                <artifactId>smallrye-common-expression</artifactId>
+                <version>${version.io.smallrye.smallrye-common}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.smallrye.common</groupId>
+                <artifactId>smallrye-common-function</artifactId>
+                <version>${version.io.smallrye.smallrye-common}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.smallrye.common</groupId>
+                <artifactId>smallrye-common-net</artifactId>
+                <version>${version.io.smallrye.smallrye-common}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.smallrye.common</groupId>
+                <artifactId>smallrye-common-os</artifactId>
+                <version>${version.io.smallrye.smallrye-common}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.smallrye.common</groupId>
+                <artifactId>smallrye-common-ref</artifactId>
+                <version>${version.io.smallrye.smallrye-common}</version>
+            </dependency>
+
             <dependency>
                 <groupId>jakarta.inject</groupId>
                 <artifactId>jakarta.inject-api</artifactId>
@@ -1046,6 +1089,16 @@
                 <groupId>org.jboss.logmanager</groupId>
                 <artifactId>jboss-logmanager</artifactId>
                 <version>${version.org.jboss.logmanager.jboss-logmanager}</version>
+                <exclusions>
+                    <exclusion>
+                        <groupId>jakarta.json</groupId>
+                        <artifactId>jakarta.json-api</artifactId>
+                    </exclusion>
+                    <exclusion>
+                        <groupId>org.eclipse.parsson</groupId>
+                        <artifactId>jakarta.json</artifactId>
+                    </exclusion>
+                </exclusions>
             </dependency>
             <dependency>
                 <groupId>org.jboss.logmanager</groupId>

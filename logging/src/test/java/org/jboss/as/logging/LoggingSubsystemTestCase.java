@@ -32,6 +32,7 @@ import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Properties;
 import java.util.regex.Pattern;
 
 import org.jboss.as.controller.AttributeDefinition;
@@ -54,6 +55,8 @@ import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.ModelType;
 import org.jboss.dmr.Property;
 import org.jboss.logmanager.LogContext;
+import org.jboss.logmanager.config.LogContextConfiguration;
+import org.jboss.logmanager.configuration.PropertyContextConfiguration;
 import org.junit.Assert;
 import org.junit.Test;
 import org.wildfly.security.manager.WildFlySecurityManager;
@@ -85,10 +88,11 @@ public class LoggingSubsystemTestCase extends AbstractLoggingSubsystemTest {
         final String dir = resolveRelativePath(kernelServices, "jboss.server.config.dir");
         Assert.assertNotNull("jboss.server.config.dir could not be resolved", dir);
         final LogContext logContext = LogContext.create();
-        final ConfigurationPersistence config = ConfigurationPersistence.getOrCreateConfigurationPersistence(logContext);
         try (final FileInputStream in = new FileInputStream(new File(dir, "logging.properties"))) {
-            config.configure(in);
-            compare(currentModel, config);
+            final Properties properties = new Properties();
+            properties.load(in);
+            final PropertyContextConfiguration contextConfiguration = PropertyContextConfiguration.configure(logContext, properties);
+            compare(currentModel, LogContextConfiguration.Factory.create(contextConfiguration));
         }
 
         kernelServices.shutdown();

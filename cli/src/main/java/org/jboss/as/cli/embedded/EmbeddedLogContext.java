@@ -19,20 +19,18 @@ package org.jboss.as.cli.embedded;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Collections;
-import java.util.List;
-import java.util.logging.Handler;
+import java.util.Properties;
 
 import org.jboss.as.cli.CommandContext;
-import org.jboss.logmanager.Configurator;
-import org.jboss.logmanager.Level;
 import org.jboss.logmanager.LogContext;
 import org.jboss.logmanager.Logger;
-import org.jboss.logmanager.PropertyConfigurator;
-import org.jboss.logmanager.config.LogContextConfiguration;
+import org.jboss.logmanager.configuration.PropertyContextConfiguration;
+import org.wildfly.core.embedded.logging.EmbeddedLogger;
 import org.wildfly.security.manager.WildFlySecurityManager;
 
 /**
@@ -46,6 +44,7 @@ import org.wildfly.security.manager.WildFlySecurityManager;
  * @author <a href="mailto:jperkins@redhat.com">James R. Perkins</a>
  */
 class EmbeddedLogContext {
+    private static final Logger.AttachmentKey<PropertyContextConfiguration> ATTACHMENT_KEY = new Logger.AttachmentKey<>();
 
     private static class Holder {
         static final LogContext LOG_CONTEXT = LogContext.create();
@@ -70,16 +69,9 @@ class EmbeddedLogContext {
             WildFlySecurityManager.setPropertyPrivileged("org.jboss.boot.log.file", bootLog.toAbsolutePath().toString());
 
             try (final InputStream in = Files.newInputStream(loggingProperties)) {
-                // Attempt to get the configurator from the root logger
-                Configurator configurator = embeddedLogContext.getAttachment("", Configurator.ATTACHMENT_KEY);
-                if (configurator == null) {
-                    configurator = new PropertyConfigurator(embeddedLogContext);
-                    final Configurator existing = embeddedLogContext.getLogger("").attachIfAbsent(Configurator.ATTACHMENT_KEY, configurator);
-                    if (existing != null) {
-                        configurator = existing;
-                    }
-                }
-                configurator.configure(in);
+                final Properties properties = new Properties();
+                properties.load(new InputStreamReader(in, StandardCharsets.UTF_8));
+                embeddedLogContext.attach(ATTACHMENT_KEY, PropertyContextConfiguration.configure(embeddedLogContext, properties));
             } catch (IOException e) {
                 ctx.printLine(String.format("Unable to configure logging from configuration file %s. Reason: %s", loggingProperties, e.getLocalizedMessage()));
             }
@@ -93,63 +85,13 @@ class EmbeddedLogContext {
     static synchronized void clearLogContext() {
         final LogContext embeddedLogContext = Holder.LOG_CONTEXT;
         // Remove the configurator and clear the log context
-        final Configurator configurator = embeddedLogContext.getLogger("").detach(Configurator.ATTACHMENT_KEY);
-        // If this was a PropertyConfigurator we can use the LogContextConfiguration API to tear down the LogContext
-        if (configurator instanceof PropertyConfigurator) {
-            final LogContextConfiguration logContextConfiguration = ((PropertyConfigurator) configurator).getLogContextConfiguration();
-            clearLogContext(logContextConfiguration);
-        } else if (configurator instanceof LogContextConfiguration) {
-            clearLogContext((LogContextConfiguration) configurator);
-        } else {
-            // Remove all the handlers and close them as well as reset the loggers
-            final List<String> loggerNames = Collections.list(embeddedLogContext.getLoggerNames());
-            for (String name : loggerNames) {
-                final Logger logger = embeddedLogContext.getLoggerIfExists(name);
-                if (logger != null) {
-                    final Handler[] handlers = logger.clearHandlers();
-                    if (handlers != null) {
-                        for (Handler handler : handlers) {
-                            handler.close();
-                        }
-                    }
-                    logger.setFilter(null);
-                    logger.setUseParentFilters(false);
-                    logger.setUseParentHandlers(true);
-                    logger.setLevel(Level.INFO);
-                }
+        final PropertyContextConfiguration configurator = embeddedLogContext.detach(ATTACHMENT_KEY);
+        if (configurator != null) {
+            try {
+                configurator.close();
+            } catch (Exception e) {
+                EmbeddedLogger.ROOT_LOGGER.failedToCloseLogContext(e);
             }
-        }
-    }
-
-    private static void clearLogContext(final LogContextConfiguration logContextConfiguration) {
-        try {
-            // Remove all the handlers
-            for (String s5 : logContextConfiguration.getHandlerNames()) {
-                logContextConfiguration.removeHandlerConfiguration(s5);
-            }
-            // Remove all the formatters
-            for (String s4 : logContextConfiguration.getFormatterNames()) {
-                logContextConfiguration.removeFormatterConfiguration(s4);
-            }
-            // Remove all the error managers
-            for (String s3 : logContextConfiguration.getErrorManagerNames()) {
-                logContextConfiguration.removeErrorManagerConfiguration(s3);
-            }
-            // Remove all the POJO's
-            for (String s2 : logContextConfiguration.getPojoNames()) {
-                logContextConfiguration.removePojoConfiguration(s2);
-            }
-            // Remove all the loggers
-            for (String s1 : logContextConfiguration.getLoggerNames()) {
-                logContextConfiguration.removeLoggerConfiguration(s1);
-            }
-            // Remove all the filters
-            for (String s : logContextConfiguration.getFilterNames()) {
-                logContextConfiguration.removeFilterConfiguration(s);
-            }
-            logContextConfiguration.commit();
-        } finally {
-            logContextConfiguration.forget();
         }
     }
 }

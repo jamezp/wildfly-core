@@ -72,9 +72,7 @@ import org.jboss.as.subsystem.test.SubsystemOperations;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.ModelType;
 import org.jboss.dmr.Property;
-import org.jboss.logmanager.Configurator;
 import org.jboss.logmanager.LogContext;
-import org.jboss.logmanager.PropertyConfigurator;
 import org.jboss.logmanager.config.FormatterConfiguration;
 import org.jboss.logmanager.config.HandlerConfiguration;
 import org.jboss.logmanager.config.LogContextConfiguration;
@@ -226,8 +224,7 @@ public abstract class AbstractLoggingSubsystemTest extends AbstractSubsystemBase
         }
     }
 
-    void compare(final ModelNode currentModel, final ConfigurationPersistence config) throws OperationFailedException {
-        final LogContextConfiguration logContextConfig = config.getLogContextConfiguration();
+    void compare(final ModelNode currentModel, final LogContextConfiguration logContextConfig) throws OperationFailedException {
         final List<String> handlerNames = logContextConfig.getHandlerNames();
         final List<String> modelHandlerNames = getHandlerNames(currentModel);
         final List<String> missingConfigHandlers = new ArrayList<>(handlerNames);
@@ -539,14 +536,7 @@ public abstract class AbstractLoggingSubsystemTest extends AbstractSubsystemBase
 
     @SuppressWarnings("ChainOfInstanceofChecks")
     private LogContextConfiguration getLogContextConfiguration(final LogContext logContext) {
-        final Configurator configurator = logContext.getAttachment(CommonAttributes.ROOT_LOGGER_NAME, Configurator.ATTACHMENT_KEY);
-        if (configurator instanceof LogContextConfiguration) {
-            return (LogContextConfiguration) configurator;
-        }
-        if (configurator instanceof PropertyConfigurator) {
-            return ((PropertyConfigurator) configurator).getLogContextConfiguration();
-        }
-        return null;
+        return logContext.getAttachment(CommonAttributes.ROOT_LOGGER_NAME, ConfigurationPersistence.ATTACHMENT_KEY);
     }
 
 

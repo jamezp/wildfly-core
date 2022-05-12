@@ -26,7 +26,6 @@ import java.io.Closeable;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.channels.FileLock;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -35,10 +34,8 @@ import org.jboss.as.controller.OperationContext;
 import org.jboss.as.logging.CommonAttributes;
 import org.jboss.as.logging.logging.LoggingLogger;
 import org.jboss.as.logging.resolvers.FileResolver;
-import org.jboss.logmanager.Configurator;
 import org.jboss.logmanager.LogContext;
 import org.jboss.logmanager.Logger;
-import org.jboss.logmanager.PropertyConfigurator;
 import org.jboss.logmanager.config.ErrorManagerConfiguration;
 import org.jboss.logmanager.config.FilterConfiguration;
 import org.jboss.logmanager.config.FormatterConfiguration;
@@ -46,6 +43,7 @@ import org.jboss.logmanager.config.HandlerConfiguration;
 import org.jboss.logmanager.config.LogContextConfiguration;
 import org.jboss.logmanager.config.LoggerConfiguration;
 import org.jboss.logmanager.config.PojoConfiguration;
+import org.jboss.logmanager.configuration.ContextConfiguration;
 
 /**
  * Persists the {@literal logging.properties} file.
@@ -55,22 +53,17 @@ import org.jboss.logmanager.config.PojoConfiguration;
  *
  * @author <a href="mailto:jperkins@redhat.com">James R. Perkins</a>
  */
-public class ConfigurationPersistence implements Configurator, LogContextConfiguration {
+public class ConfigurationPersistence implements LogContextConfiguration {
+    public static final Logger.AttachmentKey<ConfigurationPersistence> ATTACHMENT_KEY = new Logger.AttachmentKey<>();
 
     private static final Object LOCK = new Object();
     private static final String PROPERTIES_FILE = "logging.properties";
     private static final byte[] NOTE_MESSAGE = String.format("# Note this file has been generated and will be overwritten if a%n" +
             "# logging subsystem has been defined in the XML configuration.%n%n").getBytes(StandardCharsets.UTF_8);
-    private final PropertyConfigurator config;
     private final LogContextConfiguration delegate;
 
-    private ConfigurationPersistence(final LogContext logContext) {
-        this(new PropertyConfigurator(logContext));
-    }
-
-    private ConfigurationPersistence(final PropertyConfigurator config) {
-        this.config = config;
-        delegate = config.getLogContextConfiguration();
+    private ConfigurationPersistence(final ContextConfiguration config) {
+        delegate = LogContextConfiguration.Factory.create(config);
     }
 
     /**
@@ -91,28 +84,23 @@ public class ConfigurationPersistence implements Configurator, LogContextConfigu
      */
     public static ConfigurationPersistence getOrCreateConfigurationPersistence(final LogContext logContext) {
         final Logger root = logContext.getLogger(CommonAttributes.ROOT_LOGGER_NAME);
-        final ConfigurationPersistence result;
+        ConfigurationPersistence result;
         synchronized (LOCK) {
-            Configurator configurator = root.getAttachment(Configurator.ATTACHMENT_KEY);
-            if (configurator == null) {
-                configurator = new ConfigurationPersistence(logContext);
-                Configurator existing = root.attachIfAbsent(Configurator.ATTACHMENT_KEY, configurator);
-                if (existing != null) {
-                    configurator = existing;
+            result = root.getAttachment(ATTACHMENT_KEY);
+            if (result == null) {
+                ContextConfiguration contextConfiguration = root.getAttachment(ContextConfiguration.CONTEXT_CONFIGURATION_KEY);
+                if (contextConfiguration == null) {
+                    contextConfiguration = new ContextConfiguration(logContext);
+                    ContextConfiguration existing = root.attachIfAbsent(ContextConfiguration.CONTEXT_CONFIGURATION_KEY, contextConfiguration);
+                    if (existing != null) {
+                        contextConfiguration = existing;
+                    }
                 }
-            }
-            if (configurator instanceof ConfigurationPersistence) {
-                // We have the correct configurator
-                result = (ConfigurationPersistence) configurator;
-            } else if (configurator instanceof PropertyConfigurator) {
-                // Create a new configurator delegating to the configurator found
-                result = new ConfigurationPersistence((PropertyConfigurator) configurator);
-                root.attach(Configurator.ATTACHMENT_KEY, result);
-            } else {
-                // An unknown configurator, log a warning and replace
-                LoggingLogger.ROOT_LOGGER.replacingConfigurator(configurator);
-                result = new ConfigurationPersistence(logContext);
-                root.attach(Configurator.ATTACHMENT_KEY, result);
+                result = new ConfigurationPersistence(contextConfiguration);
+                final ConfigurationPersistence appearing = root.attachIfAbsent(ATTACHMENT_KEY, result);
+                if (appearing != null) {
+                    result = appearing;
+                }
             }
         }
         return result;
@@ -128,7 +116,7 @@ public class ConfigurationPersistence implements Configurator, LogContextConfigu
      */
     public static ConfigurationPersistence getConfigurationPersistence(final LogContext logContext) {
         if (logContext == null) return null;
-        return (ConfigurationPersistence) logContext.getAttachment(CommonAttributes.ROOT_LOGGER_NAME, Configurator.ATTACHMENT_KEY);
+        return logContext.getAttachment(CommonAttributes.ROOT_LOGGER_NAME, ATTACHMENT_KEY);
     }
 
     private static void safeClose(final Closeable closeable) {
@@ -140,9 +128,10 @@ public class ConfigurationPersistence implements Configurator, LogContextConfigu
     }
 
     @Override
-    public void configure(final InputStream inputStream) throws IOException {
+    public void close() throws Exception {
         synchronized (LOCK) {
-            config.configure(inputStream);
+            getLogContext().getLogger(CommonAttributes.ROOT_LOGGER_NAME).detach(ATTACHMENT_KEY);
+            delegate.close();
         }
     }
 
@@ -402,7 +391,8 @@ public class ConfigurationPersistence implements Configurator, LogContextConfigu
                         final FileLock lock = out.getChannel().lock();
                         try {
                             out.write(NOTE_MESSAGE);
-                            config.writeConfiguration(out);
+                            //config.writeConfiguration(out);
+                            // TODO (jrp) how do we write?
                         } finally {
                             // The write should close the stream which would release the lock this check ensures the
                             // lock will be released
