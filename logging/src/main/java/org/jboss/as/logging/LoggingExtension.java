@@ -75,7 +75,6 @@ import org.jboss.as.logging.handlers.SyslogHandlerResourceDefinition;
 import org.jboss.as.logging.loggers.LoggerResourceDefinition;
 import org.jboss.as.logging.loggers.RootLoggerResourceDefinition;
 import org.jboss.as.logging.logging.LoggingLogger;
-import org.jboss.as.logging.logmanager.WildFlyLogContextSelector;
 import org.jboss.as.logging.stdio.LogContextStdioContextSelector;
 import org.jboss.dmr.ModelNode;
 import org.jboss.logmanager.LogContext;
@@ -83,6 +82,7 @@ import org.jboss.modules.Module;
 import org.jboss.modules.ModuleLoader;
 import org.jboss.staxmapper.XMLElementReader;
 import org.jboss.stdio.StdioContext;
+import org.wildfly.core.logmanager.WildFlyLogContextSelector;
 import org.wildfly.security.manager.WildFlySecurityManager;
 
 /**
@@ -165,7 +165,7 @@ public class LoggingExtension implements Extension {
             if (getBooleanProperty(EMBEDDED_PROPERTY, true)) {
                 contextSelector = WildFlyLogContextSelector.Factory.createEmbedded();
             } else {
-                contextSelector = WildFlyLogContextSelector.Factory.create();
+                contextSelector = WildFlyLogContextSelector.getContextSelector();
             }
         } else {
 
@@ -186,7 +186,7 @@ public class LoggingExtension implements Extension {
                     throw LoggingLogger.ROOT_LOGGER.extensionNotInitialized();
                 }
             }
-            contextSelector = WildFlyLogContextSelector.Factory.create();
+            contextSelector = WildFlyLogContextSelector.getContextSelector();
 
             // Install STDIO context selector
             StdioContext.setStdioContextSelector(new LogContextStdioContextSelector(StdioContext.getStdioContext()));
@@ -306,16 +306,16 @@ public class LoggingExtension implements Extension {
         final ConsoleHandlerResourceDefinition consoleHandlerResourceDefinition = new ConsoleHandlerResourceDefinition(includeLegacyAttributes);
         registration.registerSubModel(consoleHandlerResourceDefinition);
 
-        final FileHandlerResourceDefinition fileHandlerResourceDefinition = new FileHandlerResourceDefinition(resolvePathHandler, diskUsagePathHandler, includeLegacyAttributes);
+        final FileHandlerResourceDefinition fileHandlerResourceDefinition = new FileHandlerResourceDefinition(resolvePathHandler, diskUsagePathHandler, pathManager, includeLegacyAttributes);
         registration.registerSubModel(fileHandlerResourceDefinition);
 
-        final PeriodicHandlerResourceDefinition periodicHandlerResourceDefinition = new PeriodicHandlerResourceDefinition(resolvePathHandler, diskUsagePathHandler, includeLegacyAttributes);
+        final PeriodicHandlerResourceDefinition periodicHandlerResourceDefinition = new PeriodicHandlerResourceDefinition(resolvePathHandler, diskUsagePathHandler, pathManager, includeLegacyAttributes);
         registration.registerSubModel(periodicHandlerResourceDefinition);
 
-        final PeriodicSizeRotatingHandlerResourceDefinition periodicSizeRotatingHandlerResourceDefinition = new PeriodicSizeRotatingHandlerResourceDefinition(resolvePathHandler, diskUsagePathHandler);
+        final PeriodicSizeRotatingHandlerResourceDefinition periodicSizeRotatingHandlerResourceDefinition = new PeriodicSizeRotatingHandlerResourceDefinition(resolvePathHandler, diskUsagePathHandler, pathManager);
         registration.registerSubModel(periodicSizeRotatingHandlerResourceDefinition);
 
-        final SizeRotatingHandlerResourceDefinition sizeRotatingHandlerResourceDefinition = new SizeRotatingHandlerResourceDefinition(resolvePathHandler, includeLegacyAttributes);
+        final SizeRotatingHandlerResourceDefinition sizeRotatingHandlerResourceDefinition = new SizeRotatingHandlerResourceDefinition(resolvePathHandler, diskUsagePathHandler, pathManager, includeLegacyAttributes);
         registration.registerSubModel(sizeRotatingHandlerResourceDefinition);
 
         final CustomHandlerResourceDefinition customHandlerResourceDefinition = new CustomHandlerResourceDefinition(includeLegacyAttributes);

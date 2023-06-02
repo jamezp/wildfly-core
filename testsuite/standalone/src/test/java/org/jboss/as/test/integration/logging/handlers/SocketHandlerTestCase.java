@@ -125,9 +125,7 @@ public class SocketHandlerTestCase extends AbstractLoggingTestCase {
         final CompositeOperationBuilder builder = CompositeOperationBuilder.create();
         ModelNode address;
         while ((address = resourcesToRemove.pollFirst()) != null) {
-            final ModelNode op = Operations.createOperation("remove-handler", LOGGER_ADDRESS);
-            op.get("name").set(getName(address));
-            builder.addStep(op);
+            builder.addStep(Operations.createUndefineAttributeOperation(LOGGER_ADDRESS, "handlers"));
             builder.addStep(Operations.createRemoveOperation(address));
         }
         executeOperation(builder.build());
@@ -286,7 +284,6 @@ public class SocketHandlerTestCase extends AbstractLoggingTestCase {
             // Change the outbound-socket-binding-ref, which should require a reload
             op = Operations.createWriteAttributeOperation(altAddress, "outbound-socket-binding-ref", altName);
             executeOperation(op);
-            ServerReload.executeReloadAndWaitForCompletion(client.getControllerClient());
 
             // Log a single message to the alternate log server and validate
             foundMessage = executeRequest("Test alternate message",

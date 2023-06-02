@@ -30,6 +30,8 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
+import java.util.logging.Filter;
+import java.util.logging.Level;
 
 import org.jboss.as.controller.AttributeDefinition;
 import org.jboss.as.controller.OperationFailedException;
@@ -37,6 +39,17 @@ import org.jboss.as.logging.CommonAttributes;
 import org.jboss.as.logging.Logging;
 import org.jboss.as.logging.logging.LoggingLogger;
 import org.jboss.dmr.ModelNode;
+import org.jboss.logmanager.configuration.ContextConfiguration;
+import org.jboss.logmanager.filters.AcceptAllFilter;
+import org.jboss.logmanager.filters.AllFilter;
+import org.jboss.logmanager.filters.AnyFilter;
+import org.jboss.logmanager.filters.DenyAllFilter;
+import org.jboss.logmanager.filters.InvertFilter;
+import org.jboss.logmanager.filters.LevelChangingFilter;
+import org.jboss.logmanager.filters.LevelFilter;
+import org.jboss.logmanager.filters.LevelRangeFilter;
+import org.jboss.logmanager.filters.RegexFilter;
+import org.jboss.logmanager.filters.SubstituteFilter;
 
 /**
  * Filter utilities and constants.
@@ -73,7 +86,8 @@ public class Filters {
             final StringBuilder result = new StringBuilder();
             filterToFilterSpec(value, result, false);
             if (result.length() == 0) {
-                final String name = value.hasDefined(CommonAttributes.FILTER.getName()) ? value.get(CommonAttributes.FILTER.getName()).asString() : value.asString();
+                final String name = value.hasDefined(CommonAttributes.FILTER.getName()) ? value.get(CommonAttributes.FILTER.getName())
+                        .asString() : value.asString();
                 throw Logging.createOperationFailure(LoggingLogger.ROOT_LOGGER.invalidFilter(name));
             }
             return result.toString();
@@ -110,6 +124,89 @@ public class Filters {
         return result;
     }
 
+    public static Filter createFilter(final ContextConfiguration configuration, final String expression) {
+        if (expression == null) {
+            return null;
+        }
+        return parseFilterExpression(configuration, tokens(expression).iterator());
+    }
+
+    private static Filter parseFilterExpression(final ContextConfiguration configuration, final Iterator<String> iterator) {
+        if (!iterator.hasNext()) {
+            throw endOfExpression();
+        }
+        final String token = iterator.next();
+        if ("accept".equals(token)) {
+            return AcceptAllFilter.getInstance();
+        } else if ("deny".equals(token)) {
+            return DenyAllFilter.getInstance();
+        } else if ("not".equals(token)) {
+            expect("(", iterator);
+            final Filter nested = parseFilterExpression(configuration, iterator);
+            expect(")", iterator);
+            return new InvertFilter(nested);
+        } else if ("all".equals(token)) {
+            expect("(", iterator);
+            final List<Filter> producers = new ArrayList<>();
+            do {
+                producers.add(parseFilterExpression(configuration, iterator));
+            } while (expect(",", ")", iterator));
+            return new AllFilter(producers);
+        } else if ("any".equals(token)) {
+            expect("(", iterator);
+            final List<Filter> producers = new ArrayList<>();
+            do {
+                producers.add(parseFilterExpression(configuration, iterator));
+            } while (expect(",", ")", iterator));
+            return new AnyFilter(producers);
+        } else if ("levelChange".equals(token)) {
+            expect("(", iterator);
+            final String levelName = expectName(iterator);
+            final Level level = configuration.getContext().getLevelForName(levelName);
+            expect(")", iterator);
+            return new LevelChangingFilter(level);
+        } else if ("levels".equals(token)) {
+            expect("(", iterator);
+            final Set<Level> levels = new HashSet<>();
+            do {
+                levels.add(configuration.getContext().getLevelForName(expectName(iterator)));
+            } while (expect(",", ")", iterator));
+            return new LevelFilter(levels);
+        } else if ("levelRange".equals(token)) {
+            final boolean minInclusive = expect("[", "(", iterator);
+            final Level minLevel = configuration.getContext().getLevelForName(expectName(iterator));
+            expect(",", iterator);
+            final Level maxLevel = configuration.getContext().getLevelForName(expectName(iterator));
+            final boolean maxInclusive = expect("]", ")", iterator);
+            return new LevelRangeFilter(minLevel, minInclusive, maxLevel, maxInclusive);
+        } else if ("match".equals(token)) {
+            expect("(", iterator);
+            final String pattern = expectString(iterator);
+            expect(")", iterator);
+            return new RegexFilter(pattern);
+        } else if ("substitute".equals(token)) {
+            expect("(", iterator);
+            final String pattern = expectString(iterator);
+            expect(",", iterator);
+            final String replacement = expectString(iterator);
+            expect(")", iterator);
+            return new SubstituteFilter(pattern, replacement, false);
+        } else if ("substituteAll".equals(token)) {
+            expect("(", iterator);
+            final String pattern = expectString(iterator);
+            expect(",", iterator);
+            final String replacement = expectString(iterator);
+            expect(")", iterator);
+            return new SubstituteFilter(pattern, replacement, true);
+        } else {
+            if (!configuration.hasFilter(token)) {
+                // TODO (jrp) i18n
+                throw new IllegalArgumentException(String.format("No filter named \"%s\" is defined", token));
+            }
+            return configuration.getFilter(token);
+        }
+    }
+
     private static Collection<String> parseFilterExpression(final String value) {
         return parseFilterExpression(tokens(value).iterator(), new ModelNode(), true, false);
     }
@@ -118,6 +215,7 @@ public class Filters {
         parseFilterExpression(iterator, model, true, true);
     }
 
+    // TODO (jrp) we need to produce real filters like this as well
     @SuppressWarnings("ConstantConditions")
     private static Collection<String> parseFilterExpression(final Iterator<String> iterator, final ModelNode model, final boolean outermost, final boolean forFilter) {
         final Collection<String> result = new ArrayList<>();
@@ -261,6 +359,11 @@ public class Filters {
 
     private static void set(final String name, final ModelNode model, final boolean value) {
         model.get(name).set(value);
+    }
+
+    private static IllegalArgumentException endOfExpression() {
+        // TODO (jrp) i18n
+        return new IllegalArgumentException("Unexpected end of filter expression");
     }
 
 
@@ -414,8 +517,10 @@ public class Filters {
                 }
                 final ModelNode levelRange = value.get(CommonAttributes.LEVEL_RANGE_LEGACY.getName());
                 result.append(LEVEL_RANGE);
-                final boolean minInclusive = (levelRange.hasDefined(CommonAttributes.MIN_INCLUSIVE.getName()) && levelRange.get(CommonAttributes.MIN_INCLUSIVE.getName()).asBoolean());
-                final boolean maxInclusive = (levelRange.hasDefined(CommonAttributes.MAX_INCLUSIVE.getName()) && levelRange.get(CommonAttributes.MAX_INCLUSIVE.getName()).asBoolean());
+                final boolean minInclusive = (levelRange.hasDefined(CommonAttributes.MIN_INCLUSIVE.getName()) && levelRange.get(CommonAttributes.MIN_INCLUSIVE.getName())
+                        .asBoolean());
+                final boolean maxInclusive = (levelRange.hasDefined(CommonAttributes.MAX_INCLUSIVE.getName()) && levelRange.get(CommonAttributes.MAX_INCLUSIVE.getName())
+                        .asBoolean());
                 if (minInclusive) {
                     result.append("[");
                 } else {
@@ -470,7 +575,8 @@ public class Filters {
                         .append(")");
             }
         } else {
-            final String name = value.hasDefined(CommonAttributes.FILTER.getName()) ? value.get(CommonAttributes.FILTER.getName()).asString() : value.asString();
+            final String name = value.hasDefined(CommonAttributes.FILTER.getName()) ? value.get(CommonAttributes.FILTER.getName())
+                    .asString() : value.asString();
             throw Logging.createOperationFailure(LoggingLogger.ROOT_LOGGER.invalidFilter(name));
         }
     }

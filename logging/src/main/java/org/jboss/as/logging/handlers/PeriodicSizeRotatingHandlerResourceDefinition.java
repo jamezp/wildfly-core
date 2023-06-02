@@ -27,14 +27,22 @@ import static org.jboss.as.logging.handlers.SizeRotatingHandlerResourceDefinitio
 import static org.jboss.as.logging.handlers.SizeRotatingHandlerResourceDefinition.ROTATE_ON_BOOT;
 import static org.jboss.as.logging.handlers.SizeRotatingHandlerResourceDefinition.ROTATE_SIZE;
 
+import java.io.FileNotFoundException;
+
 import org.jboss.as.controller.AttributeDefinition;
+import org.jboss.as.controller.OperationContext;
+import org.jboss.as.controller.OperationFailedException;
 import org.jboss.as.controller.PathElement;
 import org.jboss.as.controller.services.path.PathInfoHandler;
+import org.jboss.as.controller.services.path.PathManager;
 import org.jboss.as.controller.services.path.ResolvePathHandler;
 import org.jboss.as.controller.transform.description.ResourceTransformationDescriptionBuilder;
 import org.jboss.as.logging.KnownModelVersion;
 import org.jboss.as.logging.Logging;
 import org.jboss.as.logging.TransformerResourceDefinition;
+import org.jboss.as.logging.logging.LoggingLogger;
+import org.jboss.dmr.ModelNode;
+import org.jboss.logmanager.configuration.ContextConfiguration;
 import org.jboss.logmanager.handlers.PeriodicSizeRotatingFileHandler;
 
 /**
@@ -49,8 +57,11 @@ public class PeriodicSizeRotatingHandlerResourceDefinition extends AbstractFileH
 
     private static final AttributeDefinition[] ATTRIBUTES = Logging.join(DEFAULT_ATTRIBUTES, AUTOFLUSH, APPEND, MAX_BACKUP_INDEX, ROTATE_SIZE, ROTATE_ON_BOOT, SUFFIX, NAMED_FORMATTER, FILE);
 
-    public PeriodicSizeRotatingHandlerResourceDefinition(final ResolvePathHandler resolvePathHandler, final PathInfoHandler diskUsagePathHandler) {
-        super(PERIODIC_SIZE_ROTATING_HANDLER_PATH, false, PeriodicSizeRotatingFileHandler.class, resolvePathHandler, diskUsagePathHandler, ATTRIBUTES);
+    public PeriodicSizeRotatingHandlerResourceDefinition(final ResolvePathHandler resolvePathHandler, final PathInfoHandler diskUsagePathHandler,
+                                                         final PathManager pathManager) {
+        super(createParameters(PERIODIC_SIZE_ROTATING_HANDLER_PATH, new FileHandlerAddStepHandler(false, pathManager)),
+                false, resolvePathHandler, diskUsagePathHandler,
+                new FileHandlerWriteStepHandler(false, pathManager), ATTRIBUTES);
     }
 
     public static final class TransformerDefinition extends TransformerResourceDefinition {
@@ -69,6 +80,73 @@ public class PeriodicSizeRotatingHandlerResourceDefinition extends AbstractFileH
                     loggingProfileBuilder.rejectChildResource(PERIODIC_SIZE_ROTATING_HANDLER_PATH);
                     break;
                 }
+            }
+        }
+    }
+
+    private static class FileHandlerAddStepHandler extends AbstractHandlerAddStepHandler<PeriodicSizeRotatingFileHandler> {
+        private final PathManager pathManager;
+
+        private FileHandlerAddStepHandler(final boolean includeLegacyAttributes, final PathManager pathManager) {
+            super(includeLegacyAttributes, ATTRIBUTES);
+            this.pathManager = pathManager;
+        }
+
+        @Override
+        void performRuntime(final OperationContext context, final ModelNode operation, final ModelNode model,
+                            final PeriodicSizeRotatingFileHandler handler, final ContextConfiguration configuration, final String name) throws OperationFailedException {
+            final boolean autoFlush = AUTOFLUSH.resolveModelAttribute(context, model).asBoolean();
+            handler.setAutoFlush(autoFlush);
+            handler.setRotateOnBoot(ROTATE_ON_BOOT.resolveModelAttribute(context, model).asBoolean());
+        }
+
+        @Override
+        PeriodicSizeRotatingFileHandler createHandler(final OperationContext context, final ModelNode operation, final ModelNode model,
+                                                      final ContextConfiguration configuration, final String name) throws OperationFailedException {
+            final var file = resolveFile(pathManager, context, FILE.resolveModelAttribute(context, operation));
+            final var append = APPEND.resolveModelAttribute(context, model).asBoolean();
+            final var maxBackupIndex = MAX_BACKUP_INDEX.resolveModelAttribute(context, model).asInt();
+            final var rotateSize = Handlers.parseSize(ROTATE_SIZE.resolveModelAttribute(context, model));
+            final var suffix = SUFFIX.resolveModelAttribute(context, model).asString();
+            try {
+                return new PeriodicSizeRotatingFileHandler(file.toFile(), suffix, rotateSize, maxBackupIndex, append);
+            } catch (FileNotFoundException e) {
+                throw LoggingLogger.ROOT_LOGGER.invalidLogFile(e, file);
+            }
+        }
+    }
+
+    private static class FileHandlerWriteStepHandler extends AbstractHandlerWriteStepHandler<PeriodicSizeRotatingFileHandler> {
+        private final PathManager pathManager;
+
+        protected FileHandlerWriteStepHandler(final boolean includeLegacyAttributes, final PathManager pathManager) {
+            super(includeLegacyAttributes, ATTRIBUTES);
+            this.pathManager = pathManager;
+        }
+
+        @Override
+        void applyUpdateToRuntime(final OperationContext context, final String attributeName, final ModelNode resolvedValue,
+                                     final ModelNode currentValue, final ContextConfiguration configuration,
+                                     final PeriodicSizeRotatingFileHandler handler) throws OperationFailedException {
+            if (attributeName.equals(APPEND.getName())) {
+                handler.setAppend(resolvedValue.asBoolean());
+            } else if (attributeName.equals(AUTOFLUSH.getName())) {
+                handler.setAutoFlush(resolvedValue.asBoolean());
+            } else if (attributeName.equals(FILE.getName())) {
+                final var file = resolveFile(pathManager, context, resolvedValue);
+                try {
+                    handler.setFile(file.toFile());
+                } catch (FileNotFoundException e) {
+                    throw LoggingLogger.ROOT_LOGGER.invalidLogFile(e, file);
+                }
+            } else if (attributeName.equals(SUFFIX.getName())) {
+                handler.setSuffix(resolvedValue.asStringOrNull());
+            } else if (attributeName.equals(MAX_BACKUP_INDEX.getName())) {
+                handler.setMaxBackupIndex(resolvedValue.asInt());
+            } else if (attributeName.equals(ROTATE_SIZE.getName())) {
+                handler.setRotateSize(Handlers.parseSize(resolvedValue));
+            } else if (attributeName.equals(ROTATE_ON_BOOT.getName())) {
+                handler.setRotateOnBoot(resolvedValue.asBoolean());
             }
         }
     }

@@ -19,8 +19,13 @@
 
 package org.jboss.as.logging.formatters;
 
+import org.jboss.as.controller.AttributeDefinition;
+import org.jboss.as.controller.OperationContext;
+import org.jboss.as.controller.OperationFailedException;
 import org.jboss.as.controller.PathElement;
-import org.jboss.as.logging.PropertyAttributeDefinition;
+import org.jboss.as.controller.SimpleAttributeDefinition;
+import org.jboss.as.controller.SimpleAttributeDefinitionBuilder;
+import org.jboss.as.logging.Logging;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.ModelType;
 import org.jboss.logmanager.formatters.XmlFormatter;
@@ -32,21 +37,43 @@ public class XmlFormatterResourceDefinition extends StructuredFormatterResourceD
     public static final String NAME = "xml-formatter";
     private static final PathElement PATH = PathElement.pathElement(NAME);
 
-    public static final PropertyAttributeDefinition PRINT_NAMESPACE = PropertyAttributeDefinition.Builder.of("print-namespace", ModelType.BOOLEAN, true)
+    public static final SimpleAttributeDefinition PRINT_NAMESPACE = SimpleAttributeDefinitionBuilder.create("print-namespace", ModelType.BOOLEAN, true)
             .setAllowExpression(true)
             .setDefaultValue(ModelNode.FALSE)
-            .setPropertyName("printNamespace")
             .build();
 
-    public static final PropertyAttributeDefinition NAMESPACE_URI = PropertyAttributeDefinition.Builder.of("namespace-uri", ModelType.STRING, true)
+    public static final SimpleAttributeDefinition NAMESPACE_URI = SimpleAttributeDefinitionBuilder.create("namespace-uri", ModelType.STRING, true)
             .setAllowExpression(true)
-            .setPropertyName("namespaceUri")
             .build();
+
+    private static final AttributeDefinition[] ATTRIBUTES = Logging.join(DEFAULT_ATTRIBUTES, PRINT_NAMESPACE, NAMESPACE_URI);
+
+    private static final AddStructuredFormatterStepHandler<XmlFormatter> ADD_HANDLER = new AddStructuredFormatterStepHandler<>(XmlFormatter::new, ATTRIBUTES) {
+        @Override
+        void applyAdditionalAttributes(final OperationContext context, final ModelNode operation, final ModelNode model, final XmlFormatter formatter) throws OperationFailedException {
+            formatter.setPrintNamespace(PRINT_NAMESPACE.resolveModelAttribute(context, model).asBoolean());
+            final var namespaceUri = NAMESPACE_URI.resolveModelAttribute(context, model);
+            if (namespaceUri.isDefined()) {
+                formatter.setNamespaceUri(namespaceUri.asString());
+            }
+        }
+    };
+    private static final WriteStructuredFormatterStepHandler<XmlFormatter> WRITE_HANDLER = new WriteStructuredFormatterStepHandler<>(ATTRIBUTES) {
+        @Override
+        boolean applyAdditionalAttributes(final OperationContext context, final String attributeName, final ModelNode resolvedValue, final XmlFormatter formatter) {
+            if (attributeName.equals(PRINT_NAMESPACE.getName())) {
+                formatter.setPrintNamespace(resolvedValue.asBoolean());
+            } else if (attributeName.equals(NAMESPACE_URI.getName())) {
+                formatter.setNamespaceUri(resolvedValue.asStringOrNull());
+            }
+            return false;
+        }
+    };
 
     public static final XmlFormatterResourceDefinition INSTANCE = new XmlFormatterResourceDefinition();
 
     private XmlFormatterResourceDefinition() {
-        super(PATH, NAME, XmlFormatter.class, PRINT_NAMESPACE, NAMESPACE_URI);
+        super(PATH, NAME, ADD_HANDLER, WRITE_HANDLER);
     }
 
     public static final class TransformerDefinition extends StructuredFormatterTransformerDefinition {

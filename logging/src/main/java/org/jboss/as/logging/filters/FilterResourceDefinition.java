@@ -23,16 +23,18 @@ import static org.jboss.as.logging.CommonAttributes.CLASS;
 import static org.jboss.as.logging.CommonAttributes.MODULE;
 import static org.jboss.as.logging.CommonAttributes.PROPERTIES;
 
+import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
+import java.util.logging.Filter;
 
+import org.jboss.as.controller.AbstractAddStepHandler;
+import org.jboss.as.controller.AbstractRemoveStepHandler;
+import org.jboss.as.controller.AbstractWriteAttributeHandler;
 import org.jboss.as.controller.AttributeDefinition;
 import org.jboss.as.controller.OperationContext;
 import org.jboss.as.controller.OperationFailedException;
 import org.jboss.as.controller.OperationStepHandler;
-import org.jboss.as.controller.PathAddress;
 import org.jboss.as.controller.PathElement;
 import org.jboss.as.controller.SimpleMapAttributeDefinition;
 import org.jboss.as.controller.SimpleResourceDefinition;
@@ -40,17 +42,16 @@ import org.jboss.as.controller.registry.ManagementResourceRegistration;
 import org.jboss.as.controller.registry.Resource;
 import org.jboss.as.controller.transform.description.ResourceTransformationDescriptionBuilder;
 import org.jboss.as.logging.KnownModelVersion;
+import org.jboss.as.logging.Logging;
 import org.jboss.as.logging.LoggingExtension;
-import org.jboss.as.logging.LoggingOperations;
-import org.jboss.as.logging.LoggingOperations.LoggingWriteAttributeHandler;
 import org.jboss.as.logging.PropertyAttributeMarshaller;
 import org.jboss.as.logging.TransformerResourceDefinition;
 import org.jboss.as.logging.capabilities.Capabilities;
 import org.jboss.as.logging.logging.LoggingLogger;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.Property;
-import org.jboss.logmanager.config.FilterConfiguration;
-import org.jboss.logmanager.config.LogContextConfiguration;
+import org.wildfly.core.logmanager.ObjectBuilder;
+import org.wildfly.core.logmanager.ObjectUpdater;
 
 /**
  * The resource definition for {@code /subsystem=logging/filter=*}.
@@ -60,7 +61,9 @@ import org.jboss.logmanager.config.LogContextConfiguration;
 public class FilterResourceDefinition extends SimpleResourceDefinition {
     public static final String NAME = "filter";
 
-    public static final SimpleMapAttributeDefinition CONSTRUCTOR_PROPERTIES = new SimpleMapAttributeDefinition.Builder("constructor-properties", true)
+    public static final SimpleMapAttributeDefinition CONSTRUCTOR_PROPERTIES = new SimpleMapAttributeDefinition.Builder(
+            "constructor-properties",
+            true)
             .setAllowExpression(true)
             .setAttributeMarshaller(PropertyAttributeMarshaller.INSTANCE)
             .setXmlName("constructor-properties")
@@ -79,7 +82,7 @@ public class FilterResourceDefinition extends SimpleResourceDefinition {
     /**
      * A step handler to add a custom filter
      */
-    private static final OperationStepHandler ADD = new LoggingOperations.LoggingAddOperationStepHandler(ATTRIBUTES) {
+    private static final OperationStepHandler ADD = new AbstractAddStepHandler(ATTRIBUTES) {
         private final List<String> reservedNames = Arrays.asList(
                 "accept",
                 "deny",
@@ -95,7 +98,8 @@ public class FilterResourceDefinition extends SimpleResourceDefinition {
         );
 
         @Override
-        protected void populateModel(final OperationContext context, final ModelNode operation, final Resource resource) throws OperationFailedException {
+        protected void populateModel(final OperationContext context, final ModelNode operation, final Resource resource) throws
+                OperationFailedException {
             // Check the name isn't a reserved filter name
             final String name = context.getCurrentAddressValue();
             if (reservedNames.contains(name)) {
@@ -114,100 +118,118 @@ public class FilterResourceDefinition extends SimpleResourceDefinition {
         }
 
         @Override
-        public void performRuntime(final OperationContext context, final ModelNode operation, final ModelNode model, final LogContextConfiguration logContextConfiguration) throws OperationFailedException {
+        protected void performRuntime(final OperationContext context, final ModelNode operation, final ModelNode model) throws
+                OperationFailedException {
             final String name = context.getCurrentAddressValue();
-            FilterConfiguration configuration = logContextConfiguration.getFilterConfiguration(name);
             final String className = CLASS.resolveModelAttribute(context, model).asString();
             final ModelNode moduleNameNode = MODULE.resolveModelAttribute(context, model);
             final String moduleName = moduleNameNode.isDefined() ? moduleNameNode.asString() : null;
             final ModelNode properties = PROPERTIES.resolveModelAttribute(context, model);
             final ModelNode constructorProperties = CONSTRUCTOR_PROPERTIES.resolveModelAttribute(context, model);
 
-            final Map<String, String> constProps = new LinkedHashMap<>();
+            final var configuration = Logging.getContextConfiguration(context.getCurrentAddress());
+
+            final ObjectBuilder<Filter> filterBuilder = ObjectBuilder.of(configuration, Filter.class, className)
+                    .setModuleName(moduleName);
+
             if (constructorProperties.isDefined()) {
-                for (Property property : constructorProperties.asPropertyList()) {
-                    constProps.put(property.getName(), property.getValue().asString());
+                for (var property : constructorProperties.asPropertyList()) {
+                    filterBuilder.addConstructorProperty(property.getName(), property.getValue().asString());
                 }
             }
 
-            boolean replaceConfiguration = false;
-            if (configuration != null) {
-                if (!className.equals(configuration.getClassName()) || (moduleName == null ? configuration.getModuleName() != null : !moduleName.equals(configuration.getModuleName()))) {
-                    replaceConfiguration = true;
-                }
-                final List<String> configuredConstProps = configuration.getConstructorProperties();
-                for (Map.Entry<String, String> entry : constProps.entrySet()) {
-                    if (configuredConstProps.contains(entry.getKey())) {
-                        if (!configuration.getPropertyValueString(entry.getKey()).equals(entry.getValue())) {
-                            replaceConfiguration = true;
-                            break;
-                        }
-                    } else {
-                        replaceConfiguration = true;
-                        break;
-                    }
-                }
-            } else {
-                LoggingLogger.ROOT_LOGGER.tracef("Adding filter '%s' at '%s'", name, context.getCurrentAddress());
-                configuration = logContextConfiguration.addFilterConfiguration(moduleName, className, name, constProps.keySet().toArray(new String[0]));
-            }
-            if (replaceConfiguration) {
-                LoggingLogger.ROOT_LOGGER.tracef("Replacing filter '%s' at '%s'", name, context.getCurrentAddress());
-                logContextConfiguration.removeFilterConfiguration(name);
-                configuration = logContextConfiguration.addFilterConfiguration(moduleName, className, name, constProps.keySet().toArray(new String[0]));
-            }
-            for (Map.Entry<String, String> entry : constProps.entrySet()) {
-                configuration.setPropertyValueString(entry.getKey(), entry.getValue());
-            }
             if (properties.isDefined()) {
-                for (Property property : properties.asPropertyList()) {
-                    configuration.setPropertyValueString(property.getName(), property.getValue().asString());
+                for (var property : properties.asPropertyList()) {
+                    filterBuilder.addProperty(property.getName(), property.getValue().asString());
                 }
             }
+            configuration.addFilter(name, filterBuilder.buildLazy());
+        }
+
+        @Override
+        protected void rollbackRuntime(final OperationContext context, final ModelNode operation, final Resource resource) {
+            // TODO (jrp) how do we do this while keeping integrity? We'd need to make sure any logger or handler which
+            // TODO (jrp) has this filter, gets it removed. Ordering could be important here too.
+            super.rollbackRuntime(context, operation, resource);
         }
     };
 
-    private static final OperationStepHandler WRITE = new LoggingWriteAttributeHandler(ATTRIBUTES) {
+    private static final OperationStepHandler WRITE = new AbstractWriteAttributeHandler<Filter>(ATTRIBUTES) {
 
         @Override
-        protected boolean applyUpdate(final OperationContext context, final String attributeName, final String addressName, final ModelNode value, final LogContextConfiguration logContextConfiguration) throws OperationFailedException {
-            final FilterConfiguration configuration = logContextConfiguration.getFilterConfiguration(addressName);
-            String modelClass = CLASS.resolveModelAttribute(context, context.readResource(PathAddress.EMPTY_ADDRESS).getModel()).asString();
-            if (PROPERTIES.getName().equals(attributeName) && configuration.getClassName().equals(modelClass)) {
-                if (value.isDefined()) {
-                    for (Property property : value.asPropertyList()) {
-                        configuration.setPropertyValueString(property.getName(), property.getValue().asString());
-                    }
-                } else {
-                    // Remove all current properties
-                    final List<String> names = configuration.getPropertyNames();
-                    for (String name : names) {
-                        configuration.removeProperty(name);
+        protected boolean applyUpdateToRuntime(final OperationContext context, final ModelNode operation, final String attributeName,
+                                               final ModelNode resolvedValue, final ModelNode currentValue, final HandbackHolder<Filter> handbackHolder) throws
+                OperationFailedException {
+            final var configuration = Logging.getContextConfiguration(context.getCurrentAddress());
+            final Filter filter = configuration.getFilter(context.getCurrentAddressValue());
+            if (filter == null) {
+                throw LoggingLogger.ROOT_LOGGER.filterNotFound(context.getCurrentAddressValue());
+            }
+            handbackHolder.setHandback(filter);
+            final var updater = ObjectUpdater.of(configuration, Filter.class, filter);
+            boolean reloadRequired = true;
+            if (PROPERTIES.getName().equals(attributeName)) {
+                final List<String> changedProperties = new ArrayList<>();
+                if (resolvedValue.isDefined()) {
+                    for (var property : resolvedValue.asPropertyList()) {
+                        changedProperties.add(property.getName());
+                        updater.addProperty(property.getName(), property.getValue().asString());
                     }
                 }
+                // Find the properties we need to remove
+                if (currentValue.hasDefined(PROPERTIES.getName())) {
+                    currentValue.asPropertyList().stream()
+                            .map(Property::getName)
+                            .filter(propertyName -> !changedProperties.contains(propertyName))
+                            .forEach(updater::clearProperty);
+                }
+                reloadRequired = false;
             }
 
+            updater.update();
             // Writing a class attribute or module will require the previous filter to be removed and a new filter
             // added. This also would require each logger or handler that has the filter assigned to reassign the
             // filter. The configuration API does not handle this so a reload will be required.
-            return CLASS.getName().equals(attributeName) || MODULE.getName().equals(attributeName) ||
-                    CONSTRUCTOR_PROPERTIES.getName().equals(attributeName);
+            return reloadRequired;
+        }
+
+        @Override
+        protected void revertUpdateToRuntime(final OperationContext context, final ModelNode operation, final String attributeName,
+                                             final ModelNode valueToRestore, final ModelNode valueToRevert, final Filter handback) throws
+                OperationFailedException {
+            // If the handback is null, we can't reset anything, but also nothing should have been set
+            if (handback != null) {
+                final var configuration = Logging.getContextConfiguration(context.getCurrentAddress());
+                final var updater = ObjectUpdater.of(configuration, Filter.class, handback);
+                if (PROPERTIES.getName().equals(attributeName)) {
+                    if (valueToRestore.isDefined()) {
+                        for (Property property : valueToRestore.asPropertyList()) {
+                            updater.addProperty(property.getName(), property.getValue().asString());
+                        }
+                    }
+                }
+                updater.update();
+            }
         }
     };
 
     /**
      * A step handler to remove
      */
-    private static final OperationStepHandler REMOVE = new LoggingOperations.LoggingRemoveOperationStepHandler() {
+    private static final OperationStepHandler REMOVE = new AbstractRemoveStepHandler() {
 
         @Override
-        public void performRuntime(final OperationContext context, final ModelNode operation, final ModelNode model, final LogContextConfiguration logContextConfiguration) throws OperationFailedException {
-            final String name = context.getCurrentAddressValue();
-            final FilterConfiguration configuration = logContextConfiguration.getFilterConfiguration(name);
-            if (configuration == null) {
-                throw LoggingLogger.ROOT_LOGGER.filterNotFound(name);
-            }
-            logContextConfiguration.removeFilterConfiguration(name);
+        protected void performRuntime(final OperationContext context, final ModelNode operation, final ModelNode model) throws
+                OperationFailedException {
+            final var configuration = Logging.getContextConfiguration(context.getCurrentAddress());
+            // This should not be in-use because the capability check should fail if it is
+            configuration.removeFilter(context.getCurrentAddressValue());
+        }
+
+        @Override
+        protected void recoverServices(final OperationContext context, final ModelNode operation, final ModelNode model) throws
+                OperationFailedException {
+            // TODO (jrp) how do we do this
         }
     };
 

@@ -29,7 +29,6 @@ import java.util.Collections;
 import java.util.List;
 
 import org.jboss.as.logging.logging.LoggingLogger;
-import org.jboss.as.logging.logmanager.WildFlyLogContextSelector;
 import org.jboss.as.server.deployment.AttachmentKey;
 import org.jboss.as.server.deployment.Attachments;
 import org.jboss.as.server.deployment.DeploymentPhaseContext;
@@ -40,6 +39,7 @@ import org.jboss.as.server.deployment.SubDeploymentMarker;
 import org.jboss.as.server.deployment.module.ResourceRoot;
 import org.jboss.logmanager.LogContext;
 import org.jboss.modules.Module;
+import org.wildfly.core.logmanager.WildFlyLogContextSelector;
 import org.wildfly.security.manager.WildFlySecurityManager;
 
 /**

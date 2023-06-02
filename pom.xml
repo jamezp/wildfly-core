@@ -293,6 +293,7 @@
         <module>embedded</module>
         <module>event-logger</module>
         <module>host-controller</module>
+        <module>log-manager</module>
         <module>logging</module>
         <module>management-client-content</module>
         <module>installation-manager</module>
@@ -1067,6 +1068,16 @@
                 <groupId>org.jboss.logmanager</groupId>
                 <artifactId>jboss-logmanager</artifactId>
                 <version>${version.org.jboss.logmanager.jboss-logmanager}</version>
+                <exclusions>
+                    <exclusion>
+                        <groupId>jakarta.json</groupId>
+                        <artifactId>jakarta.json-api</artifactId>
+                    </exclusion>
+                    <exclusion>
+                        <groupId>org.eclipse.parsson</groupId>
+                        <artifactId>jakarta.json</artifactId>
+                    </exclusion>
+                </exclusions>
             </dependency>
             <dependency>
                 <groupId>org.jboss.logmanager</groupId>
@@ -1595,6 +1606,11 @@
             <dependency>
                 <groupId>org.wildfly.core</groupId>
                 <artifactId>wildfly-logging</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.wildfly.core</groupId>
+                <artifactId>wildfly-logmanager</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

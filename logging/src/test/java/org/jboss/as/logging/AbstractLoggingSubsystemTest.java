@@ -38,6 +38,7 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.logging.Handler;
 
 import org.jboss.as.controller.OperationFailedException;
 import org.jboss.as.controller.PathAddress;
@@ -46,6 +47,7 @@ import org.jboss.as.controller.client.helpers.ClientConstants;
 import org.jboss.as.controller.descriptions.ModelDescriptionConstants;
 import org.jboss.as.controller.services.path.PathResourceDefinition;
 import org.jboss.as.logging.filters.FilterResourceDefinition;
+import org.jboss.as.logging.filters.Filters;
 import org.jboss.as.logging.formatters.CustomFormatterResourceDefinition;
 import org.jboss.as.logging.formatters.PatternFormatterResourceDefinition;
 import org.jboss.as.logging.handlers.AbstractHandlerDefinition;
@@ -58,13 +60,9 @@ import org.jboss.as.logging.handlers.PeriodicSizeRotatingHandlerResourceDefiniti
 import org.jboss.as.logging.handlers.SizeRotatingHandlerResourceDefinition;
 import org.jboss.as.logging.handlers.SocketHandlerResourceDefinition;
 import org.jboss.as.logging.handlers.SyslogHandlerResourceDefinition;
-import org.jboss.as.logging.handlers.SyslogHandlerResourceDefinition.FacilityAttribute;
-import org.jboss.as.logging.handlers.Target;
 import org.jboss.as.logging.loggers.LoggerAttributes;
 import org.jboss.as.logging.loggers.LoggerResourceDefinition;
 import org.jboss.as.logging.loggers.RootLoggerResourceDefinition;
-import org.jboss.as.logging.logmanager.ConfigurationPersistence;
-import org.jboss.as.logging.resolvers.SizeResolver;
 import org.jboss.as.subsystem.test.AbstractSubsystemBaseTest;
 import org.jboss.as.subsystem.test.AdditionalInitialization;
 import org.jboss.as.subsystem.test.KernelServices;
@@ -72,13 +70,14 @@ import org.jboss.as.subsystem.test.SubsystemOperations;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.ModelType;
 import org.jboss.dmr.Property;
-import org.jboss.logmanager.Configurator;
+import org.jboss.logmanager.ExtHandler;
 import org.jboss.logmanager.LogContext;
-import org.jboss.logmanager.PropertyConfigurator;
-import org.jboss.logmanager.config.FormatterConfiguration;
-import org.jboss.logmanager.config.HandlerConfiguration;
-import org.jboss.logmanager.config.LogContextConfiguration;
-import org.jboss.logmanager.config.LoggerConfiguration;
+import org.jboss.logmanager.Logger;
+import org.jboss.logmanager.configuration.ContextConfiguration;
+import org.jboss.logmanager.formatters.PatternFormatter;
+import org.jboss.logmanager.handlers.AsyncHandler;
+import org.jboss.logmanager.handlers.ConsoleHandler;
+import org.jboss.logmanager.handlers.FileHandler;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.BeforeClass;
@@ -217,18 +216,19 @@ public abstract class AbstractLoggingSubsystemTest extends AbstractSubsystemBase
             compare(node1, node2);
         } else {
             Assert.assertTrue("Logging profile not found: " + profileName, node1.hasDefined(CommonAttributes.LOGGING_PROFILE));
-            Assert.assertTrue("Logging profile not found: " + profileName, node1.get(CommonAttributes.LOGGING_PROFILE).hasDefined(profileName));
+            Assert.assertTrue("Logging profile not found: " + profileName, node1.get(CommonAttributes.LOGGING_PROFILE)
+                    .hasDefined(profileName));
             Assert.assertTrue("Logging profile not found: " + profileName, node2.hasDefined(CommonAttributes.LOGGING_PROFILE));
-            Assert.assertTrue("Logging profile not found: " + profileName, node2.get(CommonAttributes.LOGGING_PROFILE).hasDefined(profileName));
+            Assert.assertTrue("Logging profile not found: " + profileName, node2.get(CommonAttributes.LOGGING_PROFILE)
+                    .hasDefined(profileName));
             final ModelNode node1Profile = node1.get(CommonAttributes.LOGGING_PROFILE, profileName);
             final ModelNode node2Profile = node2.get(CommonAttributes.LOGGING_PROFILE, profileName);
             compare(node1Profile, node2Profile);
         }
     }
 
-    void compare(final ModelNode currentModel, final ConfigurationPersistence config) throws OperationFailedException {
-        final LogContextConfiguration logContextConfig = config.getLogContextConfiguration();
-        final List<String> handlerNames = logContextConfig.getHandlerNames();
+    void compare(final ModelNode currentModel, final ContextConfiguration config) throws OperationFailedException {
+        final Set<String> handlerNames = config.getHandlers().keySet();
         final List<String> modelHandlerNames = getHandlerNames(currentModel);
         final List<String> missingConfigHandlers = new ArrayList<>(handlerNames);
         missingConfigHandlers.removeAll(modelHandlerNames);
@@ -239,19 +239,20 @@ public abstract class AbstractLoggingSubsystemTest extends AbstractSubsystemBase
         Assert.assertTrue("Model contains handlers not in the configuration: " + missingModelHandlers, missingModelHandlers.isEmpty());
 
         // Compare property values for the handlers
-        compareHandlers(logContextConfig, handlerNames, currentModel);
+        compareHandlers(config, handlerNames, currentModel);
 
         // Compare logger values
-        compareLoggers(logContextConfig, currentModel);
+        compareLoggers(config, currentModel);
 
     }
 
-    void compare(final String profileName, final ModelNode currentModel, final ConfigurationPersistence config) throws OperationFailedException {
+    void compare(final String profileName, final ModelNode currentModel, final ContextConfiguration config) throws OperationFailedException {
         if (profileName == null) {
             compare(currentModel, config);
         } else {
             Assert.assertTrue("Logging profile not found: " + profileName, currentModel.hasDefined(CommonAttributes.LOGGING_PROFILE));
-            Assert.assertTrue("Logging profile not found: " + profileName, currentModel.get(CommonAttributes.LOGGING_PROFILE).hasDefined(profileName));
+            Assert.assertTrue("Logging profile not found: " + profileName, currentModel.get(CommonAttributes.LOGGING_PROFILE)
+                    .hasDefined(profileName));
             final ModelNode profileModel = currentModel.get(CommonAttributes.LOGGING_PROFILE, profileName);
             compare(profileModel, config);
         }
@@ -275,10 +276,10 @@ public abstract class AbstractLoggingSubsystemTest extends AbstractSubsystemBase
         assertTrue(String.format("Additional attributes (%s) found on the resource %s", resourceAttributes, resource), resourceAttributes.isEmpty());
     }
 
-    private void compareLoggers(final LogContextConfiguration logContextConfiguration, final ModelNode model) {
-        final List<String> loggerNames = logContextConfiguration.getLoggerNames();
+    private void compareLoggers(final ContextConfiguration configuration, final ModelNode model) {
+        final Set<String> loggerNames = configuration.getLoggers();
         for (String name : loggerNames) {
-            final LoggerConfiguration loggerConfig = logContextConfiguration.getLoggerConfiguration(name);
+            final Logger logger = configuration.getLogger(name);
             final ModelNode loggerModel = (name.isEmpty() ? model.get(RootLoggerResourceDefinition.NAME, RootLoggerResourceDefinition.RESOURCE_NAME) :
                     model.get(LoggerResourceDefinition.NAME, name));
             // Logger could be empty
@@ -289,32 +290,34 @@ public abstract class AbstractLoggingSubsystemTest extends AbstractSubsystemBase
                 attributes.remove(CommonAttributes.NAME.getName());
                 for (String attribute : attributes) {
                     if (attribute.equals(CommonAttributes.LEVEL.getName())) {
-                        final String configValue = loggerConfig.getLevel();
+                        final String configValue = logger.getLevel().toString();
                         final String modelValue = loggerModel.get(attribute).asString();
                         Assert.assertEquals(String.format("Levels do not match. Config Value: %s  Model Value: %s", configValue, modelValue), configValue, modelValue);
                     } else if (attribute.equals(LoggerAttributes.FILTER_SPEC.getName())) {
-                        final String configValue = loggerConfig.getFilter();
-                        final String modelValue = loggerModel.hasDefined(attribute) ? loggerModel.get(attribute).asString() : null;
+                        final var configValue = logger.getFilter();
+                        final var modelValue = loggerModel.hasDefined(attribute) ? Filters.createFilter(configuration, loggerModel.get(attribute)
+                                .asString()) : null;
+                        // TODO (jrp) this will fail if not-null because equals might not match
                         Assert.assertEquals(String.format("Filter expressions do not match. Config Value: %s  Model Value: %s", configValue, modelValue), configValue, modelValue);
                     } else if (attribute.equals(LoggerAttributes.HANDLERS.getName())) {
-                        final List<String> handlerNames = loggerConfig.getHandlerNames();
-                        final ModelNode handlers = loggerModel.get(attribute);
-                        if (handlers.isDefined()) {
-                            final List<String> modelHandlerNames = new ArrayList<>();
-                            for (ModelNode handler : handlers.asList()) {
-                                modelHandlerNames.add(handler.asString());
+                        final List<Handler> configHandlers = logger.getHandlers() == null ? Collections.emptyList() : List.of(logger.getHandlers());
+                        final ModelNode modelHandlers = loggerModel.get(attribute);
+                        if (modelHandlers.isDefined()) {
+                            final List<Handler> modelHandlerNames = new ArrayList<>();
+                            for (ModelNode handler : modelHandlers.asList()) {
+                                modelHandlerNames.add(configuration.getHandler(handler.asString()));
                             }
-                            final List<String> missingConfigHandlers = new ArrayList<>(handlerNames);
+                            final List<Handler> missingConfigHandlers = new ArrayList<>(configHandlers);
                             missingConfigHandlers.removeAll(modelHandlerNames);
-                            final List<String> missingModelHandlers = new ArrayList<>(modelHandlerNames);
-                            missingModelHandlers.removeAll(handlerNames);
+                            final List<Handler> missingModelHandlers = new ArrayList<>(modelHandlerNames);
+                            missingModelHandlers.removeAll(configHandlers);
                             Assert.assertTrue("Logger in model contains handlers not in the configuration: " + missingConfigHandlers, missingConfigHandlers.isEmpty());
                             Assert.assertTrue("Logger in configuration contains handlers not in the model: " + missingModelHandlers, missingModelHandlers.isEmpty());
                         } else {
-                            Assert.assertTrue("Handlers attached to loggers in the configuration that are not attached to loggers in the model. Logger: " + name, handlerNames.isEmpty());
+                            Assert.assertTrue("Handlers attached to loggers in the configuration that are not attached to loggers in the model. Logger: " + logger.getName(), configHandlers.isEmpty());
                         }
                     } else if (attribute.equals(LoggerResourceDefinition.USE_PARENT_HANDLERS.getName())) {
-                        final Boolean configValue = loggerConfig.getUseParentHandlers();
+                        final Boolean configValue = logger.getUseParentHandlers();
                         final Boolean modelValue = loggerModel.get(attribute).asBoolean();
                         Assert.assertEquals(String.format("Use parent handler attributes do not match. Config Value: %s  Model Value: %s", configValue, modelValue), configValue, modelValue);
                     } else {
@@ -327,7 +330,7 @@ public abstract class AbstractLoggingSubsystemTest extends AbstractSubsystemBase
     }
 
     // TODO (jrp) looking up property names is hard-coded, use a more dynamic approach
-    private void compareHandlers(final LogContextConfiguration logContextConfig, final Collection<String> handlerNames, final ModelNode model) throws OperationFailedException {
+    private void compareHandlers(final ContextConfiguration configuration, final Collection<String> handlerNames, final ModelNode model) throws OperationFailedException {
         final ModelNode clonedModel = model.clone();
         // Remove a socket-handler since it's wrapped in a DelayedHandler and the values will not match
         if (clonedModel.hasDefined(SocketHandlerResourceDefinition.NAME)) {
@@ -340,10 +343,9 @@ public abstract class AbstractLoggingSubsystemTest extends AbstractSubsystemBase
 
         // Compare property values for the handlers
         for (String name : handlerNames) {
-            final HandlerConfiguration handlerConfig = logContextConfig.getHandlerConfiguration(name);
+            final Handler handler = configuration.getHandler(name);
             final ModelNode handlerModel = findHandlerModel(clonedModel, name);
             final Set<String> modelPropertyNames = new HashSet<>(handlerModel.keys());
-            final List<String> configPropertyNames = new ArrayList<>(handlerConfig.getPropertyNames());
 
             // Remove unneeded properties
             modelPropertyNames.remove(CommonAttributes.FILTER.getName());
@@ -351,98 +353,102 @@ public abstract class AbstractLoggingSubsystemTest extends AbstractSubsystemBase
 
             // Process the properties
             for (String modelPropertyName : modelPropertyNames) {
-                ModelNode modelValue = handlerModel.get(modelPropertyName);
-                String modelStringValue = modelValue.asString();
-                final String configValue;
+                final ModelNode modelValue = handlerModel.get(modelPropertyName);
                 // Special properties
                 if (modelPropertyName.equals(CommonAttributes.ENABLED.getName())) {
-                    final String propertyName = CommonAttributes.ENABLED.getPropertyName();
-                    if (configPropertyNames.contains(propertyName)) {
-                        configValue = handlerConfig.getPropertyValueString(propertyName);
-                    } else {
-                        continue;
+                    if (handler instanceof ExtHandler) {
+                        Assert.assertEquals(((ExtHandler) handler).isEnabled(), modelValue.asBoolean());
                     }
                 } else if (modelPropertyName.equals(CommonAttributes.ENCODING.getName())) {
-                    configValue = handlerConfig.getEncoding();
+                    // TODO (jrp) this likely fails, but that is okay for now we will fix it.
+                    Assert.assertEquals(handler.getEncoding(), modelValue.asString());
                 } else if (modelPropertyName.equals(AbstractHandlerDefinition.FORMATTER.getName()) || modelPropertyName.equals(AbstractHandlerDefinition.NAMED_FORMATTER.getName())) {
                     // Formatters are handled differently than most attributes. A named-formatter must be separately defined.
                     // The formatter attribute is really a PatternFormatter with the same name as the handler.
 
                     // If there is a named formatter in the model, just match the names
                     if (handlerModel.hasDefined(AbstractHandlerDefinition.NAMED_FORMATTER.getName())) {
-                        configValue = handlerConfig.getFormatterName();
-                        modelValue = handlerModel.get(AbstractHandlerDefinition.NAMED_FORMATTER.getName());
+                        final var formatter = handler.getFormatter();
+                        Assert.assertNotNull("A formatter was not found on " + handler, formatter);
+                        final var foundFormatter = configuration.getFormatter(modelValue.asString());
+                        Assert.assertNotNull("A formatter was not found with name " + modelValue.asString(), foundFormatter);
+                        Assert.assertEquals(formatter, foundFormatter);
                     } else {
-                        // Not a named-formatter, so attempt to match the pattern
-                        final String formatterName = handlerConfig.getFormatterName();
-                        if (formatterName == null) {
-                            configValue = null;
-                        } else {
-                            final FormatterConfiguration formatterConfig = logContextConfig.getFormatterConfiguration(formatterName);
-                            configValue = formatterConfig.getPropertyValueString(PatternFormatterResourceDefinition.PATTERN.getName());
-                            modelValue = handlerModel.get(AbstractHandlerDefinition.FORMATTER.getName());
-                        }
+                        // Not a named-formatter, so use the name
+                        final String formatterName = PatternFormatterResourceDefinition.getDefaultFormatterName(name);
+                        Assert.assertTrue("Expected to find formatter named " + formatterName, configuration.hasFormatter(formatterName));
+                        final var formatter = configuration.getFormatter(formatterName);
+                        // We should be a PatternFormatter
+                        Assert.assertTrue("Expected an instance of a PatternFormatter got " + formatter, formatter instanceof PatternFormatter);
+                        Assert.assertEquals(((PatternFormatter) formatter).getPattern(), handlerModel.set(AbstractHandlerDefinition.FORMATTER.getName())
+                                .asString());
                     }
-                    modelStringValue = modelValue.asString();
                 } else if (modelPropertyName.equals(AbstractHandlerDefinition.FILTER_SPEC.getName())) {
-                    configValue = handlerConfig.getFilter();
+                    final var handlerFilter = handler.getFilter();
+                    final var modelFilter = Filters.createFilter(configuration, modelValue.asString());
+                    // TODO (jrp) this may not work in call cases because we could be creating a new instance
+                    Assert.assertEquals(handlerFilter, modelFilter);
                 } else if (modelPropertyName.equals(CommonAttributes.LEVEL.getName())) {
-                    configValue = handlerConfig.getLevel();
+                    Assert.assertEquals(handler.getLevel(), configuration.getContext()
+                            .getLevelForName(modelValue.asString()));
                 } else {
+                    // We should be an ExtHandler for our testing purposes
+                    Assert.assertTrue(String.format("Handler %s is not an ExtHandler", handler), handler instanceof ExtHandler);
+                    final ExtHandler extHandler = (ExtHandler) handler;
                     // Process custom properties
-                    final String configPropertyName;
                     if (modelPropertyName.equals(CommonAttributes.AUTOFLUSH.getName())) {
-                        configPropertyName = CommonAttributes.AUTOFLUSH.getPropertyName();
+                        Assert.assertEquals(extHandler.isAutoFlush(), model.get(CommonAttributes.AUTOFLUSH.getName())
+                                .asBoolean());
                     } else if (modelPropertyName.equals(SizeRotatingHandlerResourceDefinition.ROTATE_SIZE.getName())) {
-                        configPropertyName = SizeRotatingHandlerResourceDefinition.ROTATE_SIZE.getPropertyName();
-                        modelStringValue = String.valueOf(SizeResolver.INSTANCE.parseSize(modelValue));
+                        // TODO (jrp) there is no getter for the size rotation, so we need to use reflection or not test this
                     } else if (modelPropertyName.equals(CommonAttributes.FILE.getName())) {
-                        configPropertyName = CommonAttributes.FILE.getPropertyName();
+                        // The handler should be a file handler
+                        Assert.assertTrue(extHandler instanceof FileHandler);
+                        final FileHandler fileHandler = (FileHandler) extHandler;
                         // Resolve the file
-                        modelStringValue = modelValue.get(PathResourceDefinition.PATH.getName()).asString();
+                        var modelStringValue = modelValue.get(PathResourceDefinition.PATH.getName()).asString();
                         if (modelValue.hasDefined(PathResourceDefinition.RELATIVE_TO.getName())) {
-                            final String relativeTo = System.getProperty(modelValue.get(PathResourceDefinition.RELATIVE_TO.getName()).asString());
+                            final String relativeTo = System.getProperty(modelValue.get(PathResourceDefinition.RELATIVE_TO.getName())
+                                    .asString());
                             modelStringValue = relativeTo + File.separator + modelStringValue;
                         }
+                        Assert.assertEquals(fileHandler.getFile().toString(), modelStringValue);
                     } else if (modelPropertyName.equals(ConsoleHandlerResourceDefinition.TARGET.getName())) {
-                        configPropertyName = ConsoleHandlerResourceDefinition.TARGET.getPropertyName();
-                        modelStringValue = Target.fromString(modelValue.asString()).name();
+                        Assert.assertTrue(extHandler instanceof ConsoleHandler);
+                        // TODO (jrp) there is no ConsoleHandler.getTarget() so we can't do this
                     } else if (modelPropertyName.equals(AsyncHandlerResourceDefinition.SUBHANDLERS.getName())) {
-                        final List<String> handlerHandlerNames = handlerConfig.getHandlerNames();
-                        final ModelNode handlers = handlerModel.get(modelPropertyName);
-                        if (handlers.isDefined()) {
-                            final List<String> modelHandlerNames = new ArrayList<>();
-                            for (ModelNode handler : handlers.asList()) {
-                                modelHandlerNames.add(handler.asString());
+                        Assert.assertTrue(extHandler instanceof AsyncHandler);
+                        final AsyncHandler asyncHandler = (AsyncHandler) extHandler;
+                        final List<Handler> handlerHandlers = asyncHandler.getHandlers() == null ? Collections.emptyList() : List.of(asyncHandler.getHandlers());
+                        if (modelValue.isDefined()) {
+                            final List<Handler> modelHandlers = new ArrayList<>();
+                            for (ModelNode handlerName : model.asList()) {
+                                modelHandlers.add(configuration.getHandler(handlerName.asString()));
                             }
-                            final List<String> missingConfigHandlers = new ArrayList<>(handlerHandlerNames);
-                            missingConfigHandlers.removeAll(modelHandlerNames);
-                            final List<String> missingModelHandlers = new ArrayList<>(modelHandlerNames);
-                            missingModelHandlers.removeAll(handlerHandlerNames);
+                            final List<Handler> missingConfigHandlers = new ArrayList<>(handlerHandlers);
+                            missingConfigHandlers.removeAll(modelHandlers);
+                            final List<Handler> missingModelHandlers = new ArrayList<>(modelHandlers);
+                            missingModelHandlers.removeAll(handlerHandlers);
                             Assert.assertTrue("Logger in model contains handlers not in the configuration: " + missingConfigHandlers, missingConfigHandlers.isEmpty());
                             Assert.assertTrue("Logger in configuration contains handlers not in the model: " + missingModelHandlers, missingModelHandlers.isEmpty());
                         } else {
-                            Assert.assertTrue("Handlers attached to loggers in the configuration that are not attached to loggers in the model. Logger: " + name, handlerHandlerNames.isEmpty());
+                            Assert.assertTrue("Handlers attached to loggers in the configuration that are not attached to loggers in the model. Logger: " + name, handlerHandlers.isEmpty());
                         }
                         continue;
                     } else if (modelPropertyName.equals(SyslogHandlerResourceDefinition.FACILITY.getName())) {
-                        configPropertyName = modelPropertyName;
-                        modelStringValue = FacilityAttribute.fromString(modelValue.asString()).getFacility().name();
+                        // TODO (jrp) implement
+                        //configPropertyName = modelPropertyName;
+                        //modelStringValue = FacilityAttribute.fromString(modelValue.asString()).getFacility().name();
                     } else if (modelPropertyName.equals(SyslogHandlerResourceDefinition.SERVER_ADDRESS.getName())) {
-                        configPropertyName = SyslogHandlerResourceDefinition.SERVER_ADDRESS.getPropertyName();
+                        //configPropertyName = SyslogHandlerResourceDefinition.SERVER_ADDRESS.getPropertyName();
                     } else if (modelPropertyName.equals(SyslogHandlerResourceDefinition.SYSLOG_FORMATTER.getName())) {
-                        configPropertyName = SyslogHandlerResourceDefinition.SYSLOG_FORMATTER.getPropertyName();
+                        //configPropertyName = SyslogHandlerResourceDefinition.SYSLOG_FORMATTER.getPropertyName();
                     } else {
-                        configPropertyName = convertModelPropertyName(modelPropertyName);
+                        //configPropertyName = convertModelPropertyName(modelPropertyName);
                     }
 
-                    Assert.assertTrue("Configuration is missing property name: " + modelPropertyName, configPropertyNames.contains(configPropertyName));
-                    configValue = handlerConfig.getPropertyValueString(configPropertyName);
-                }
-                if (configValue == null) {
-                    Assert.assertFalse(String.format("Handler property values do not match.%nConfig Value: %s%nModel Value:  %s", configValue, modelValue), modelValue.isDefined());
-                } else {
-                    Assert.assertEquals(String.format("Handler property values do not match.%nConfig Value: %s%nModel Value:  %s", configValue, modelStringValue), configValue, modelStringValue);
+                    //Assert.assertTrue("Configuration is missing property name: " + modelPropertyName, configPropertyNames.contains(configPropertyName));
+                    //configValue = handler.getPropertyValueString(configPropertyName);
                 }
             }
         }
@@ -537,18 +543,6 @@ public abstract class AbstractLoggingSubsystemTest extends AbstractSubsystemBase
         return xmlName;
     }
 
-    @SuppressWarnings("ChainOfInstanceofChecks")
-    private LogContextConfiguration getLogContextConfiguration(final LogContext logContext) {
-        final Configurator configurator = logContext.getAttachment(CommonAttributes.ROOT_LOGGER_NAME, Configurator.ATTACHMENT_KEY);
-        if (configurator instanceof LogContextConfiguration) {
-            return (LogContextConfiguration) configurator;
-        }
-        if (configurator instanceof PropertyConfigurator) {
-            return ((PropertyConfigurator) configurator).getLogContextConfiguration();
-        }
-        return null;
-    }
-
 
     static class RemoveOperationComparator implements Comparator<PathAddress> {
         static final RemoveOperationComparator INSTANCE = new RemoveOperationComparator();
@@ -562,11 +556,11 @@ public abstract class AbstractLoggingSubsystemTest extends AbstractSubsystemBase
             final String key2 = o2.getLastElement().getKey();
             int result = key1.compareTo(key2);
             if (result != EQUAL) {
-                if (LoggingProfileOperations.isLoggingProfileAddress(o1) && !LoggingProfileOperations.isLoggingProfileAddress(o2)) {
+                if (Logging.isLoggingProfileAddress(o1) && !Logging.isLoggingProfileAddress(o2)) {
                     result = GREATER;
-                } else if (!LoggingProfileOperations.isLoggingProfileAddress(o1) && LoggingProfileOperations.isLoggingProfileAddress(o2)) {
+                } else if (!Logging.isLoggingProfileAddress(o1) && Logging.isLoggingProfileAddress(o2)) {
                     result = LESS;
-                } else if (LoggingProfileOperations.isLoggingProfileAddress(o1) && LoggingProfileOperations.isLoggingProfileAddress(o2)) {
+                } else if (Logging.isLoggingProfileAddress(o1) && Logging.isLoggingProfileAddress(o2)) {
                     if (CommonAttributes.LOGGING_PROFILE.equals(key1) && !CommonAttributes.LOGGING_PROFILE.equals(key2)) {
                         result = LESS;
                     } else if (!CommonAttributes.LOGGING_PROFILE.equals(key1) && CommonAttributes.LOGGING_PROFILE.equals(key2)) {

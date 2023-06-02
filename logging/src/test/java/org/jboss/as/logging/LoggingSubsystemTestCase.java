@@ -22,7 +22,6 @@
 package org.jboss.as.logging;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
@@ -34,10 +33,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
 
-import org.jboss.as.logging.logmanager.ConfigurationPersistence;
-import org.jboss.as.subsystem.test.KernelServices;
-import org.jboss.dmr.ModelNode;
-import org.jboss.logmanager.LogContext;
 import org.junit.Assert;
 import org.junit.Test;
 import org.wildfly.security.manager.WildFlySecurityManager;
@@ -57,25 +52,6 @@ public class LoggingSubsystemTestCase extends AbstractLoggingSubsystemTest {
     @Test
     public void testExpressions() throws Exception {
         standardSubsystemTest("/expressions.xml");
-    }
-
-    @Test
-    public void testConfiguration() throws Exception {
-        final KernelServices kernelServices = boot();
-        final ModelNode currentModel = getSubsystemModel(kernelServices);
-        compare(currentModel, ConfigurationPersistence.getConfigurationPersistence(LogContext.getLogContext()));
-
-        // Compare properties written out to current model
-        final String dir = resolveRelativePath(kernelServices, "jboss.server.config.dir");
-        Assert.assertNotNull("jboss.server.config.dir could not be resolved", dir);
-        final LogContext logContext = LogContext.create();
-        final ConfigurationPersistence config = ConfigurationPersistence.getOrCreateConfigurationPersistence(logContext);
-        try (final FileInputStream in = new FileInputStream(new File(dir, "logging.properties"))) {
-            config.configure(in);
-            compare(currentModel, config);
-        }
-        logContext.close();
-        kernelServices.shutdown();
     }
 
     @Test

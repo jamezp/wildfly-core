@@ -41,7 +41,7 @@ import org.jboss.as.controller.transform.description.ResourceTransformationDescr
 import org.jboss.as.logging.CommonAttributes;
 import org.jboss.as.logging.KnownModelVersion;
 import org.jboss.as.logging.LoggingExtension;
-import org.jboss.as.logging.LoggingOperations.ReadFilterOperationStepHandler;
+import org.jboss.as.logging.ReadFilterOperationStepHandler;
 import org.jboss.as.logging.TransformerResourceDefinition;
 import org.jboss.as.logging.capabilities.Capabilities;
 

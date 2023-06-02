@@ -30,8 +30,7 @@ import org.jboss.as.controller.descriptions.ModelDescriptionConstants;
 import org.jboss.as.logging.logging.LoggingLogger;
 import org.jboss.as.server.deployment.Services;
 import org.jboss.dmr.ModelNode;
-import org.jboss.logmanager.config.LogContextConfiguration;
-import org.jboss.logmanager.config.PropertyConfigurable;
+import org.jboss.logmanager.configuration.ContextConfiguration;
 import org.jboss.msc.service.ServiceController;
 import org.jboss.msc.service.ServiceName;
 
@@ -42,11 +41,11 @@ abstract class LoggingConfigurationReadStepHandler implements OperationStepHandl
 
     @Override
     public void execute(final OperationContext context, final ModelNode operation) {
-        LogContextConfiguration configuration = null;
+        ContextConfiguration configuration = null;
         // Lookup the service
         final ServiceController<?> controller = context.getServiceRegistry(false).getService(getServiceName(context));
         if (controller != null) {
-            configuration = (LogContextConfiguration) controller.getValue();
+            configuration = (ContextConfiguration) controller.getValue();
         }
         // Some deployments may not have a logging configuration associated, e.g. log4j configured deployments
         if (configuration != null) {
@@ -62,11 +61,11 @@ abstract class LoggingConfigurationReadStepHandler implements OperationStepHandl
     /**
      * Update the model for a resource.
      *
-     * @param logContextConfiguration the configuration to use
-     * @param name                    the name of the resource
-     * @param model                   the model to update
+     * @param configuration the configuration to use
+     * @param name          the name of the resource
+     * @param model         the model to update
      */
-    protected abstract void updateModel(LogContextConfiguration logContextConfiguration, String name, ModelNode model);
+    protected abstract void updateModel(ContextConfiguration configuration, String name, ModelNode model);
 
     /**
      * Adds properties to the model in key/value pairs.
@@ -74,9 +73,21 @@ abstract class LoggingConfigurationReadStepHandler implements OperationStepHandl
      * @param configuration the configuration to get the properties from
      * @param model         the model to update
      */
-    static void addProperties(final PropertyConfigurable configuration, final ModelNode model) {
-        for (String name : configuration.getPropertyNames()) {
-            setModelValue(model.get(name), configuration.getPropertyValueString(name));
+    //static void addProperties(final PropertyConfigurable configuration, final ModelNode model) {
+    //    for (String name : configuration.getPropertyNames()) {
+    //        setModelValue(model.get(name), configuration.getPropertyValueString(name));
+    //    }
+    //}
+
+    /**
+     * Sets the value of the model if the value is not {@code null}.
+     *
+     * @param model the model to update
+     * @param value the value for the model
+     */
+    static void setModelValue(final ModelNode model, final String value) {
+        if (value != null) {
+            model.set(value);
         }
     }
 
@@ -86,7 +97,19 @@ abstract class LoggingConfigurationReadStepHandler implements OperationStepHandl
      * @param model the model to update
      * @param value the value for the model
      */
-    static void setModelValue(final ModelNode model, final String value) {
+    static void setModelValue(final ModelNode model, final Object value) {
+        if (value != null) {
+            model.set(value.toString());
+        }
+    }
+
+    /**
+     * Sets the value of the model if the value is not {@code null}.
+     *
+     * @param model the model to update
+     * @param value the value for the model
+     */
+    static void setModelValue(final ModelNode model, final ModelNode value) {
         if (value != null) {
             model.set(value);
         }
@@ -129,7 +152,8 @@ abstract class LoggingConfigurationReadStepHandler implements OperationStepHandl
     }
 
     private static String getRuntimeName(final OperationContext context, final PathElement element) {
-        final ModelNode deploymentModel = context.readResourceFromRoot(PathAddress.pathAddress(element), false).getModel();
+        final ModelNode deploymentModel = context.readResourceFromRoot(PathAddress.pathAddress(element), false)
+                .getModel();
         if (!deploymentModel.hasDefined(ModelDescriptionConstants.RUNTIME_NAME)) {
             throw LoggingLogger.ROOT_LOGGER.deploymentNameNotFound(context.getCurrentAddress());
         }

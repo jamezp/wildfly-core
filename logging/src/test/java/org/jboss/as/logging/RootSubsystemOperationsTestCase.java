@@ -41,10 +41,10 @@ import org.jboss.as.subsystem.test.AdditionalInitialization;
 import org.jboss.as.subsystem.test.KernelServices;
 import org.jboss.as.subsystem.test.SubsystemOperations;
 import org.jboss.dmr.ModelNode;
-import org.jboss.logmanager.LogContext;
 import org.jboss.logmanager.Logger;
 import org.junit.Before;
 import org.junit.Test;
+import org.wildfly.core.logmanager.WildFlyLogContextSelector;
 
 /**
  * @author <a href="mailto:jperkins@redhat.com">James R. Perkins</a>
@@ -125,7 +125,9 @@ public class RootSubsystemOperationsTestCase extends AbstractOperationsTestCase 
         testReadLogFile(kernelServices, op, getLogger());
 
         // Test on the logging-profile
-        final ModelNode profileAddress = SUBSYSTEM_ADDRESS.append("logging-profile", "testProfile").append("log-file", "profile-simple.log").toModelNode();
+        final ModelNode profileAddress = SUBSYSTEM_ADDRESS.append("logging-profile", "testProfile")
+                .append("log-file", "profile-simple.log")
+                .toModelNode();
         op = SubsystemOperations.createOperation("read-log-file", profileAddress);
         testReadLogFile(kernelServices, op, getLogger("testProfile"));
 
@@ -370,11 +372,13 @@ public class RootSubsystemOperationsTestCase extends AbstractOperationsTestCase 
     }
 
     private Logger getLogger() {
-        return LogContext.getSystemLogContext().getLogger("org.jboss.as.logging.test");
+        return WildFlyLogContextSelector.getContextSelector().getLogContext().getLogger("org.jboss.as.logging.test");
     }
 
     private Logger getLogger(final String loggingProfile) {
-        return LoggingProfileContextSelector.getInstance().get(loggingProfile).getLogger("org.jboss.as.logging.test");
+        return WildFlyLogContextSelector.getContextSelector()
+                .getProfileContext(loggingProfile)
+                .getLogger("org.jboss.as.logging.test");
     }
 
     private static boolean setReadable(final Path path, final boolean readable) throws IOException {

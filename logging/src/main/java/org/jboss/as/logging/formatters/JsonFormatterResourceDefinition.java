@@ -32,7 +32,8 @@ public class JsonFormatterResourceDefinition extends StructuredFormatterResource
     public static final JsonFormatterResourceDefinition INSTANCE = new JsonFormatterResourceDefinition();
 
     private JsonFormatterResourceDefinition() {
-        super(PATH, NAME, JsonFormatter.class);
+        super(PATH, NAME, new AddStructuredFormatterStepHandler<>(JsonFormatter::new, DEFAULT_ATTRIBUTES),
+                new WriteStructuredFormatterStepHandler<>(DEFAULT_ATTRIBUTES));
     }
 
     public static final class TransformerDefinition extends StructuredFormatterTransformerDefinition {

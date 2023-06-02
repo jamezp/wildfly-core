@@ -433,7 +433,7 @@ public class HandlerLegacyOperationsTestCase extends AbstractOperationsTestCase 
 
     private void testWriteCommonAttributes(final KernelServices kernelServices, final ModelNode address) {
         // filter attribute not on logging profiles
-        if (!LoggingProfileOperations.isLoggingProfileAddress(PathAddress.pathAddress(address))) {
+        if (!Logging.isLoggingProfileAddress(PathAddress.pathAddress(address))) {
             final ModelNode filter = new ModelNode().setEmptyObject();
             filter.get(CommonAttributes.ACCEPT.getName()).set(true);
             testWrite(kernelServices, address, CommonAttributes.FILTER, filter);
@@ -445,7 +445,7 @@ public class HandlerLegacyOperationsTestCase extends AbstractOperationsTestCase 
     }
 
     private void testUndefineCommonAttributes(final KernelServices kernelServices, final ModelNode address) {
-        if (!LoggingProfileOperations.isLoggingProfileAddress(PathAddress.pathAddress(address))) {
+        if (!Logging.isLoggingProfileAddress(PathAddress.pathAddress(address))) {
             testUndefine(kernelServices, address, CommonAttributes.FILTER);
             // filter-spec should be undefined
             final ModelNode op = SubsystemOperations.createReadAttributeOperation(address, AbstractHandlerDefinition.FILTER_SPEC);

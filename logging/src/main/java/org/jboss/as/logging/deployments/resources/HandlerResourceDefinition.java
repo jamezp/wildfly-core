@@ -1,26 +1,25 @@
 /*
  * JBoss, Home of Professional Open Source.
- * Copyright 2015, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
  *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
+ * Copyright 2023 Red Hat, Inc., and individual contributors
+ * as indicated by the @author tags.
  *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package org.jboss.as.logging.deployments.resources;
+
+import java.util.logging.Handler;
 
 import org.jboss.as.controller.PathElement;
 import org.jboss.as.controller.SimpleAttributeDefinition;
@@ -32,8 +31,7 @@ import org.jboss.as.controller.registry.ManagementResourceRegistration;
 import org.jboss.as.logging.LoggingExtension;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.ModelType;
-import org.jboss.logmanager.config.HandlerConfiguration;
-import org.jboss.logmanager.config.LogContextConfiguration;
+import org.jboss.logmanager.configuration.ContextConfiguration;
 
 /**
  * Describes a handler used on a deployment.
@@ -92,74 +90,93 @@ class HandlerResourceDefinition extends SimpleResourceDefinition {
 
     @Override
     public void registerAttributes(final ManagementResourceRegistration resourceRegistration) {
-        resourceRegistration.registerReadOnlyAttribute(CLASS_NAME, new HandlerConfigurationReadStepHandler() {
+        resourceRegistration.registerReadOnlyAttribute(CLASS_NAME, new LoggingConfigurationReadStepHandler() {
             @Override
-            protected void updateModel(final HandlerConfiguration configuration, final ModelNode model) {
-                setModelValue(model, configuration.getClassName());
-            }
-        });
-        resourceRegistration.registerReadOnlyAttribute(MODULE, new HandlerConfigurationReadStepHandler() {
-            @Override
-            protected void updateModel(final HandlerConfiguration configuration, final ModelNode model) {
-                setModelValue(model, configuration.getModuleName());
-            }
-        });
-        resourceRegistration.registerReadOnlyAttribute(ENCODING, new HandlerConfigurationReadStepHandler() {
-            @Override
-            protected void updateModel(final HandlerConfiguration configuration, final ModelNode model) {
-                setModelValue(model, configuration.getEncoding());
-            }
-        });
-        resourceRegistration.registerReadOnlyAttribute(LEVEL, new HandlerConfigurationReadStepHandler() {
-            @Override
-            protected void updateModel(final HandlerConfiguration configuration, final ModelNode model) {
-                setModelValue(model, configuration.getLevel());
-            }
-        });
-        resourceRegistration.registerReadOnlyAttribute(FORMATTER, new HandlerConfigurationReadStepHandler() {
-            @Override
-            protected void updateModel(final HandlerConfiguration configuration, final ModelNode model) {
-                setModelValue(model, configuration.getFormatterName());
-            }
-        });
-        resourceRegistration.registerReadOnlyAttribute(FILTER, new HandlerConfigurationReadStepHandler() {
-            @Override
-            protected void updateModel(final HandlerConfiguration configuration, final ModelNode model) {
-                setModelValue(model, configuration.getFilter());
-            }
-        });
-        resourceRegistration.registerReadOnlyAttribute(HANDLERS, new HandlerConfigurationReadStepHandler() {
-            @Override
-            protected void updateModel(final HandlerConfiguration configuration, final ModelNode model) {
-                final ModelNode handlers = model.setEmptyList();
-                for (String s : configuration.getHandlerNames()) {
-                    handlers.add(s);
+            protected void updateModel(final ContextConfiguration configuration, final String name, final ModelNode model) {
+                final Handler handler = configuration.getHandler(name);
+                if (handler != null) {
+                    setModelValue(model, handler.getClass().getName());
                 }
             }
         });
-        resourceRegistration.registerReadOnlyAttribute(PROPERTIES, new HandlerConfigurationReadStepHandler() {
+        resourceRegistration.registerReadOnlyAttribute(MODULE, new LoggingConfigurationReadStepHandler() {
             @Override
-            protected void updateModel(final HandlerConfiguration configuration, final ModelNode model) {
-                addProperties(configuration, model);
+            protected void updateModel(final ContextConfiguration configuration, final String name, final ModelNode model) {
+                final Handler handler = configuration.getHandler(name);
+                if (handler != null) {
+                    // TODO (jrp) how do we do this?
+                    //setModelValue(model, handler.getClass().getModule());
+                }
             }
         });
-        resourceRegistration.registerReadOnlyAttribute(ERROR_MANAGER, new HandlerConfigurationReadStepHandler() {
+        resourceRegistration.registerReadOnlyAttribute(ENCODING, new LoggingConfigurationReadStepHandler() {
             @Override
-            protected void updateModel(final HandlerConfiguration configuration, final ModelNode model) {
-                setModelValue(model, configuration.getErrorManagerName());
+            protected void updateModel(final ContextConfiguration configuration, final String name, final ModelNode model) {
+                final Handler handler = configuration.getHandler(name);
+                if (handler != null) {
+                    setModelValue(model, handler.getEncoding());
+                }
             }
         });
-    }
-
-    abstract static class HandlerConfigurationReadStepHandler extends LoggingConfigurationReadStepHandler {
-        @Override
-        protected void updateModel(final LogContextConfiguration logContextConfiguration, final String name, final ModelNode model) {
-            final HandlerConfiguration handlerConfiguration = logContextConfiguration.getHandlerConfiguration(name);
-            updateModel(handlerConfiguration, model);
-
-        }
-
-        protected abstract void updateModel(HandlerConfiguration configuration, ModelNode model);
+        resourceRegistration.registerReadOnlyAttribute(LEVEL, new LoggingConfigurationReadStepHandler() {
+            @Override
+            protected void updateModel(final ContextConfiguration configuration, final String name, final ModelNode model) {
+                final Handler handler = configuration.getHandler(name);
+                if (handler != null) {
+                    setModelValue(model, handler.getLevel());
+                }
+            }
+        });
+        resourceRegistration.registerReadOnlyAttribute(FORMATTER, new LoggingConfigurationReadStepHandler() {
+            @Override
+            protected void updateModel(final ContextConfiguration configuration, final String name, final ModelNode model) {
+                final Handler handler = configuration.getHandler(name);
+                if (handler != null) {
+                    // TODO (jrp) we really need the formatter name
+                    setModelValue(model, handler.getFormatter());
+                }
+            }
+        });
+        resourceRegistration.registerReadOnlyAttribute(FILTER, new LoggingConfigurationReadStepHandler() {
+            @Override
+            protected void updateModel(final ContextConfiguration configuration, final String name, final ModelNode model) {
+                final Handler handler = configuration.getHandler(name);
+                if (handler != null) {
+                    // TODO (jrp) we really need the filter name/expression
+                    setModelValue(model, handler.getFilter());
+                }
+            }
+        });
+        resourceRegistration.registerReadOnlyAttribute(HANDLERS, new LoggingConfigurationReadStepHandler() {
+            @Override
+            protected void updateModel(final ContextConfiguration configuration, final String name, final ModelNode model) {
+                final Handler handler = configuration.getHandler(name);
+                if (handler != null) {
+                    // TODO (jrp) we need the handler names associated with this handler
+                    setModelValue(model, new ModelNode().setEmptyList());
+                }
+            }
+        });
+        resourceRegistration.registerReadOnlyAttribute(PROPERTIES, new LoggingConfigurationReadStepHandler() {
+            @Override
+            protected void updateModel(final ContextConfiguration configuration, final String name, final ModelNode model) {
+                final Handler handler = configuration.getHandler(name);
+                if (handler != null) {
+                    // TODO (jrp) we need the properties names associated with this handler
+                    setModelValue(model, new ModelNode().setEmptyObject());
+                }
+            }
+        });
+        resourceRegistration.registerReadOnlyAttribute(ERROR_MANAGER, new LoggingConfigurationReadStepHandler() {
+            @Override
+            protected void updateModel(final ContextConfiguration configuration, final String name, final ModelNode model) {
+                final Handler handler = configuration.getHandler(name);
+                if (handler != null) {
+                    // TODO (jrp) we need the error manager name
+                    setModelValue(model, handler.getErrorManager());
+                }
+            }
+        });
     }
 
 }

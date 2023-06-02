@@ -45,8 +45,7 @@ import org.jboss.as.controller.transform.description.ResourceTransformationDescr
 import org.jboss.as.logging.CommonAttributes;
 import org.jboss.as.logging.KnownModelVersion;
 import org.jboss.as.logging.LoggingExtension;
-import org.jboss.as.logging.LoggingOperations.ReadFilterOperationStepHandler;
-import org.jboss.as.logging.PropertyAttributeDefinition;
+import org.jboss.as.logging.ReadFilterOperationStepHandler;
 import org.jboss.as.logging.TransformerResourceDefinition;
 import org.jboss.as.logging.capabilities.Capabilities;
 import org.jboss.dmr.ModelNode;
@@ -89,10 +88,9 @@ public class LoggerResourceDefinition extends SimpleResourceDefinition {
             .setParameters(CommonAttributes.HANDLER_NAME)
             .build();
 
-    public static final PropertyAttributeDefinition USE_PARENT_HANDLERS = PropertyAttributeDefinition.Builder.of("use-parent-handlers", ModelType.BOOLEAN, true)
+    public static final SimpleAttributeDefinition USE_PARENT_HANDLERS = SimpleAttributeDefinitionBuilder.create("use-parent-handlers", ModelType.BOOLEAN, true)
             .setAllowExpression(true)
             .setDefaultValue(ModelNode.TRUE)
-            .setPropertyName("useParentHandlers")
             .build();
 
     // Be careful with this attribute. It needs to show up in the "add" operation param list so ops from legacy

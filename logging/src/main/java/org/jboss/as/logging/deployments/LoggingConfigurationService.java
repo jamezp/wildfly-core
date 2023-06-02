@@ -22,7 +22,7 @@
 
 package org.jboss.as.logging.deployments;
 
-import org.jboss.logmanager.config.LogContextConfiguration;
+import org.jboss.logmanager.configuration.ContextConfiguration;
 import org.jboss.msc.service.Service;
 import org.jboss.msc.service.StartContext;
 import org.jboss.msc.service.StartException;
@@ -33,12 +33,13 @@ import org.jboss.msc.service.StopContext;
  *
  * @author <a href="mailto:jperkins@redhat.com">James R. Perkins</a>
  */
-public class LoggingConfigurationService implements Service<LogContextConfiguration> {
-    private final LogContextConfiguration logContextConfiguration;
+// TODO (jrp) can this go away? It's using a deprecated API
+public class LoggingConfigurationService implements Service<ContextConfiguration> {
+    private final ContextConfiguration contextConfiguration;
     private final String configuration;
 
-    LoggingConfigurationService(final LogContextConfiguration logContextConfiguration, final String configuration) {
-        this.logContextConfiguration = logContextConfiguration;
+    LoggingConfigurationService(final ContextConfiguration contextConfiguration, final String configuration) {
+        this.contextConfiguration = contextConfiguration;
         this.configuration = configuration;
     }
 
@@ -53,8 +54,8 @@ public class LoggingConfigurationService implements Service<LogContextConfigurat
     }
 
     @Override
-    public LogContextConfiguration getValue() throws IllegalStateException, IllegalArgumentException {
-        return logContextConfiguration;
+    public ContextConfiguration getValue() throws IllegalStateException, IllegalArgumentException {
+        return contextConfiguration;
     }
 
     /**

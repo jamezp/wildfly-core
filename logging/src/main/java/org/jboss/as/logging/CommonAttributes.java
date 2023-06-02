@@ -40,8 +40,6 @@ import org.jboss.as.controller.operations.validation.ObjectTypeValidator;
 import org.jboss.as.controller.services.path.PathResourceDefinition;
 import org.jboss.as.logging.capabilities.Capabilities;
 import org.jboss.as.logging.correctors.FileCorrector;
-import org.jboss.as.logging.resolvers.FileResolver;
-import org.jboss.as.logging.resolvers.LevelResolver;
 import org.jboss.as.logging.validators.FileValidator;
 import org.jboss.as.logging.validators.LogLevelValidator;
 import org.jboss.dmr.ModelNode;
@@ -55,16 +53,15 @@ import org.jboss.logmanager.Level;
 public interface CommonAttributes {
 
     // Attributes
-    PropertyAttributeDefinition APPEND = PropertyAttributeDefinition.Builder.of("append", ModelType.BOOLEAN, true)
+    SimpleAttributeDefinition APPEND = SimpleAttributeDefinitionBuilder.create("append", ModelType.BOOLEAN, true)
             .setAllowExpression(true)
             .setAttributeMarshaller(ElementAttributeMarshaller.VALUE_ATTRIBUTE_MARSHALLER)
             .setDefaultValue(ModelNode.TRUE)
             .build();
 
-    PropertyAttributeDefinition AUTOFLUSH = PropertyAttributeDefinition.Builder.of("autoflush", ModelType.BOOLEAN, true)
+    SimpleAttributeDefinition AUTOFLUSH = SimpleAttributeDefinitionBuilder.create("autoflush", ModelType.BOOLEAN, true)
             .setAllowExpression(true)
             .setDefaultValue(ModelNode.TRUE)
-            .setPropertyName("autoFlush")
             .build();
 
     SimpleAttributeDefinition CLASS = SimpleAttributeDefinitionBuilder.create("class", ModelType.STRING)
@@ -72,12 +69,12 @@ public interface CommonAttributes {
             .setRestartAllServices()
             .build();
 
-    PropertyAttributeDefinition ENABLED = PropertyAttributeDefinition.Builder.of("enabled", ModelType.BOOLEAN, true)
+    SimpleAttributeDefinition ENABLED = SimpleAttributeDefinitionBuilder.create("enabled", ModelType.BOOLEAN, true)
             .setAllowExpression(true)
             .setDefaultValue(ModelNode.TRUE)
             .build();
 
-    PropertyAttributeDefinition ENCODING = PropertyAttributeDefinition.Builder.of("encoding", ModelType.STRING, true)
+    SimpleAttributeDefinition ENCODING = SimpleAttributeDefinitionBuilder.create("encoding", ModelType.STRING, true)
             .setAllowExpression(true)
             .setAttributeMarshaller(ElementAttributeMarshaller.VALUE_ATTRIBUTE_MARSHALLER)
             .build();
@@ -87,7 +84,7 @@ public interface CommonAttributes {
             .setCapabilityReference(Capabilities.PATH_CAPABILITY)
             .build();
 
-    PropertyObjectTypeAttributeDefinition FILE = PropertyObjectTypeAttributeDefinition.Builder.of("file", RELATIVE_TO, PATH)
+    ObjectTypeAttributeDefinition FILE = ObjectTypeAttributeDefinition.Builder.of("file", RELATIVE_TO, PATH)
             .setAllowExpression(false)
             .setRequired(true)
             .setAttributeMarshaller(new DefaultAttributeMarshaller() {
@@ -103,8 +100,6 @@ public interface CommonAttributes {
                 }
             })
             .setCorrector(FileCorrector.INSTANCE)
-            .setPropertyName("fileName")
-            .setResolver(FileResolver.INSTANCE)
             .setValidator(new FileValidator())
             .build();
 
@@ -113,12 +108,11 @@ public interface CommonAttributes {
             .build();
 
     // JUL doesn't allow for null levels. Use ALL as the default
-    PropertyAttributeDefinition LEVEL = PropertyAttributeDefinition.Builder.of("level", ModelType.STRING, true)
+    SimpleAttributeDefinition LEVEL = SimpleAttributeDefinitionBuilder.create("level", ModelType.STRING, true)
             .setAllowExpression(true)
             .setAttributeMarshaller(ElementAttributeMarshaller.NAME_ATTRIBUTE_MARSHALLER)
             .setCorrector(CaseParameterCorrector.TO_UPPER)
             .setDefaultValue(new ModelNode(Level.ALL.getName()))
-            .setResolver(LevelResolver.INSTANCE)
             .setValidator(new LogLevelValidator(true))
             .build();
 

@@ -53,12 +53,13 @@ import org.jboss.as.model.test.ModelTestUtils;
 import org.jboss.as.subsystem.test.KernelServices;
 import org.jboss.as.subsystem.test.SubsystemOperations;
 import org.jboss.dmr.ModelNode;
-import org.jboss.logmanager.LogContext;
 import org.jboss.logmanager.Logger;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.wildfly.core.logmanager.WildFlyContextConfiguration;
+import org.wildfly.core.logmanager.WildFlyLogContextSelector;
 
 /**
  * @author <a href="kabir.khan@jboss.com">Kabir Khan</a>
@@ -105,10 +106,10 @@ public class LoggingOperationsSubsystemTestCase extends AbstractLoggingSubsystem
     @Override
     public void clearLogContext() throws Exception {
         super.clearLogContext();
-        final LoggingProfileContextSelector contextSelector = LoggingProfileContextSelector.getInstance();
-        if (contextSelector.exists(PROFILE)) {
-            contextSelector.get(PROFILE).close();
-            contextSelector.remove(PROFILE);
+        final WildFlyLogContextSelector contextSelector = WildFlyLogContextSelector.getContextSelector();
+        if (contextSelector.profileContextExists(PROFILE)) {
+            contextSelector.getProfileContext(PROFILE).close();
+            contextSelector.removeProfileContext(PROFILE);
         }
     }
 
@@ -528,7 +529,8 @@ public class LoggingOperationsSubsystemTestCase extends AbstractLoggingSubsystem
         // The operation should set the enabled attribute to false
         final ModelNode readOp = SubsystemOperations.createReadAttributeOperation(handlerAddress, CommonAttributes.ENABLED);
         ModelNode result = executeOperation(kernelServices, readOp);
-        assertFalse("enabled attribute should be false when the disable operation is invoked", SubsystemOperations.readResult(result).asBoolean());
+        assertFalse("enabled attribute should be false when the disable operation is invoked", SubsystemOperations.readResult(result)
+                .asBoolean());
 
         // Log 3 more lines
         logger.info("Test message 4");
@@ -546,7 +548,8 @@ public class LoggingOperationsSubsystemTestCase extends AbstractLoggingSubsystem
 
         // The operation should set the enabled attribute to true
         result = executeOperation(kernelServices, readOp);
-        assertTrue("enabled attribute should be true when the enable operation is invoked", SubsystemOperations.readResult(result).asBoolean());
+        assertTrue("enabled attribute should be true when the enable operation is invoked", SubsystemOperations.readResult(result)
+                .asBoolean());
 
         // Log 3 more lines
         logger.info("Test message 7");
@@ -674,7 +677,9 @@ public class LoggingOperationsSubsystemTestCase extends AbstractLoggingSubsystem
         ModelNode op = SubsystemOperations.createAddOperation(address);
         op.get(CommonAttributes.NAME.getName()).set(name);
         op.get(CommonAttributes.LEVEL.getName()).set(level.getName());
-        op.get(CommonAttributes.FILE.getName()).get(PathResourceDefinition.PATH.getName()).set(file.toAbsolutePath().toString());
+        op.get(CommonAttributes.FILE.getName())
+                .get(PathResourceDefinition.PATH.getName())
+                .set(file.toAbsolutePath().toString());
         op.get(CommonAttributes.AUTOFLUSH.getName()).set(true);
         executeOperation(kernelServices, op);
 
@@ -722,13 +727,8 @@ public class LoggingOperationsSubsystemTestCase extends AbstractLoggingSubsystem
     }
 
     private Logger getLogger(final String profileName) {
-        final LogContext logContext;
-        if (profileName != null) {
-            logContext = LoggingProfileContextSelector.getInstance().get(profileName);
-        } else {
-            logContext = LogContext.getSystemLogContext();
-        }
-        return logContext.getLogger(FQCN);
+        final var configuration = WildFlyContextConfiguration.getInstance(profileName);
+        return configuration.getContext().getLogger(FQCN);
     }
 
     private ModelNode createAddHandlerOperation(final ModelNode address, final String handlerName) {

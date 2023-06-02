@@ -22,17 +22,20 @@ package org.jboss.as.logging.loggers;
 import static org.jboss.as.logging.CommonAttributes.FILTER;
 import static org.jboss.as.logging.CommonAttributes.HANDLER_NAME;
 import static org.jboss.as.logging.CommonAttributes.LEVEL;
-import static org.jboss.as.logging.Logging.createOperationFailure;
+import static org.jboss.as.logging.CommonAttributes.ROOT_LOGGER_NAME;
 import static org.jboss.as.logging.loggers.LoggerAttributes.FILTER_SPEC;
 import static org.jboss.as.logging.loggers.LoggerAttributes.HANDLER;
 import static org.jboss.as.logging.loggers.LoggerAttributes.HANDLERS;
 import static org.jboss.as.logging.loggers.LoggerResourceDefinition.USE_PARENT_HANDLERS;
 import static org.jboss.as.logging.loggers.RootLoggerResourceDefinition.RESOURCE_NAME;
 
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
+import java.util.logging.Level;
+import java.util.stream.Collectors;
 
+import org.jboss.as.controller.AbstractAddStepHandler;
+import org.jboss.as.controller.AbstractRemoveStepHandler;
+import org.jboss.as.controller.AbstractWriteAttributeHandler;
 import org.jboss.as.controller.AttributeDefinition;
 import org.jboss.as.controller.OperationContext;
 import org.jboss.as.controller.OperationFailedException;
@@ -40,12 +43,12 @@ import org.jboss.as.controller.OperationStepHandler;
 import org.jboss.as.controller.PathAddress;
 import org.jboss.as.controller.registry.Resource;
 import org.jboss.as.logging.CommonAttributes;
-import org.jboss.as.logging.LoggingOperations;
+import org.jboss.as.logging.Logging;
 import org.jboss.as.logging.filters.Filters;
 import org.jboss.as.logging.logging.LoggingLogger;
 import org.jboss.dmr.ModelNode;
-import org.jboss.logmanager.config.LogContextConfiguration;
-import org.jboss.logmanager.config.LoggerConfiguration;
+import org.jboss.logmanager.Logger;
+import org.wildfly.core.logmanager.WildFlyDelayedHandler;
 
 /**
  * Date: 14.12.2011
@@ -54,41 +57,11 @@ import org.jboss.logmanager.config.LoggerConfiguration;
  */
 final class LoggerOperations {
 
-    abstract static class LoggerUpdateOperationStepHandler extends LoggingOperations.LoggingUpdateOperationStepHandler {
-
-        LoggerUpdateOperationStepHandler(final AttributeDefinition... attributes) {
-            super(attributes);
-        }
-
-        @Override
-        public final void performRuntime(final OperationContext context, final ModelNode operation, final ModelNode model, final LogContextConfiguration logContextConfiguration) throws OperationFailedException {
-            final String loggerName = getLogManagerLoggerName(context.getCurrentAddressValue());
-            LoggerConfiguration configuration = logContextConfiguration.getLoggerConfiguration(loggerName);
-            if (configuration == null) {
-                throw createOperationFailure(LoggingLogger.ROOT_LOGGER.loggerConfigurationNotFound(loggerName));
-            }
-            performRuntime(context, operation, configuration, loggerName, model);
-        }
-
-        /**
-         * Executes additional processing for this step.
-         *
-         * @param context       the operation context
-         * @param operation     the operation being executed
-         * @param configuration the logging configuration
-         * @param name          the name of the logger
-         * @param model         the model to update
-         *
-         * @throws OperationFailedException if a processing error occurs
-         */
-        public abstract void performRuntime(OperationContext context, ModelNode operation, LoggerConfiguration configuration, String name, ModelNode model) throws OperationFailedException;
-    }
-
 
     /**
      * A step handler for add operations of logging handlers. Adds default properties to the handler configuration.
      */
-    static final class LoggerAddOperationStepHandler extends LoggingOperations.LoggingAddOperationStepHandler {
+    static final class LoggerAddOperationStepHandler extends AbstractAddStepHandler {
         private final AttributeDefinition[] attributes;
 
         LoggerAddOperationStepHandler(final AttributeDefinition[] attributes) {
@@ -104,7 +77,8 @@ final class LoggerOperations {
                     final ModelNode filter = CommonAttributes.FILTER.validateOperation(operation);
                     if (filter.isDefined()) {
                         final String value = Filters.filterToFilterSpec(filter);
-                        model.get(LoggerAttributes.FILTER_SPEC.getName()).set(value.isEmpty() ? new ModelNode() : new ModelNode(value));
+                        model.get(LoggerAttributes.FILTER_SPEC.getName())
+                                .set(value.isEmpty() ? new ModelNode() : new ModelNode(value));
                     }
                 } else {
                     attribute.validateAndSet(operation, model);
@@ -113,17 +87,34 @@ final class LoggerOperations {
         }
 
         @Override
-        public void performRuntime(final OperationContext context, final ModelNode operation, final ModelNode model, final LogContextConfiguration logContextConfiguration) throws OperationFailedException {
+        protected void performRuntime(final OperationContext context, final ModelNode operation, final ModelNode model) throws OperationFailedException {
+            final var configuration = Logging.getContextConfiguration(context.getCurrentAddress());
             final String name = context.getCurrentAddressValue();
             final String loggerName = getLogManagerLoggerName(name);
-            LoggerConfiguration configuration = logContextConfiguration.getLoggerConfiguration(loggerName);
-            if (configuration == null) {
-                LoggingLogger.ROOT_LOGGER.tracef("Adding logger '%s' at '%s'", name, context.getCurrentAddress());
-                configuration = logContextConfiguration.addLoggerConfiguration(loggerName);
-            }
-
-            for (AttributeDefinition attribute : attributes) {
-                handleProperty(attribute, context, model, configuration);
+            final Logger logger = configuration.getContext().getLogger(loggerName);
+            logger.setLevel(configuration.getContext()
+                    .getLevelForName(LEVEL.resolveModelAttribute(context, model).asString()));
+            // Filters need to be in a new step for composite operations
+            context.addStep((runtimeContext, runtimeOperation) -> {
+                final var filter = FILTER_SPEC.resolveModelAttribute(runtimeContext, model);
+                if (filter.isDefined()) {
+                    logger.setFilter(Filters.createFilter(configuration, filter.asString()));
+                } else {
+                    // If a previous filter was added, we need to clear it.
+                    logger.setFilter(null);
+                }
+            }, OperationContext.Stage.RUNTIME);
+            // Handlers need to be added last
+            context.addStep((runtimeContext, runtimeOperation) -> {
+                final var handlers = HANDLERS.resolveModelAttribute(runtimeContext, model);
+                if (handlers.isDefined()) {
+                    // We use a DelayedHandler on the root logger and we'll add the handlers to that handler to activate it
+                    WildFlyDelayedHandler.setHandlers(logger, HANDLERS.getHandlers(configuration, runtimeContext, model));
+                }
+            }, OperationContext.Stage.RUNTIME);
+            // For non-root loggers the use-parent-handlers may have been set
+            if (!loggerName.equals(ROOT_LOGGER_NAME)) {
+                logger.setUseParentHandlers(USE_PARENT_HANDLERS.resolveModelAttribute(context, model).asBoolean());
             }
         }
     }
@@ -132,31 +123,59 @@ final class LoggerOperations {
     /**
      * A default log handler write attribute step handler.
      */
-    static class LoggerWriteAttributeHandler extends LoggingOperations.LoggingWriteAttributeHandler {
+    static class LoggerWriteAttributeHandler extends AbstractWriteAttributeHandler<Logger> {
 
         LoggerWriteAttributeHandler(final AttributeDefinition[] attributes) {
             super(attributes);
         }
 
         @Override
-        protected boolean applyUpdate(final OperationContext context, final String attributeName, final String addressName, final ModelNode value, final LogContextConfiguration logContextConfiguration) throws OperationFailedException {
-            final String loggerName = getLogManagerLoggerName(addressName);
-            if (logContextConfiguration.getLoggerNames().contains(loggerName)) {
-                final LoggerConfiguration configuration = logContextConfiguration.getLoggerConfiguration(loggerName);
-                if (LEVEL.getName().equals(attributeName)) {
-                    handleProperty(LEVEL, context, value, configuration, false);
-                } else if (FILTER.getName().equals(attributeName)) {
-                    // Filter should be replaced by the filter-spec in the super class
-                    handleProperty(FILTER_SPEC, context, value, configuration, false);
-                } else if (FILTER_SPEC.getName().equals(attributeName)) {
-                    handleProperty(FILTER_SPEC, context, value, configuration, false);
-                } else if (HANDLERS.getName().equals(attributeName)) {
-                    handleProperty(HANDLERS, context, value, configuration, false);
-                } else if (USE_PARENT_HANDLERS.getName().equals(attributeName)) {
-                    handleProperty(USE_PARENT_HANDLERS, context, value, configuration, false);
-                }
+        protected boolean applyUpdateToRuntime(final OperationContext context, final ModelNode operation,
+                                               final String attributeName, final ModelNode resolvedValue,
+                                               final ModelNode currentValue, final HandbackHolder<Logger> handbackHolder) throws OperationFailedException {
+            final var configuration = Logging.getContextConfiguration(context.getCurrentAddress());
+            final var loggerName = getLogManagerLoggerName(context.getCurrentAddressValue());
+            final var logger = configuration.getContext().getLogger(loggerName);
+            handbackHolder.setHandback(logger);
+            if (LEVEL.getName().equals(attributeName)) {
+                logger.setLevel(configuration.getContext().getLevelForName(resolvedValue.asString()));
+            } else if (FILTER.getName().equals(attributeName)) {
+                // Filter should be replaced by the filter-spec in the super class
+                // TODO (jrp) how do we get the filter-spec value?
+                logger.setFilter(Filters.createFilter(configuration, resolvedValue.asStringOrNull()));
+                //handleProperty(FILTER_SPEC, context, value, configuration, false);
+            } else if (FILTER_SPEC.getName().equals(attributeName)) {
+                logger.setFilter(Filters.createFilter(configuration, resolvedValue.asStringOrNull()));
+            } else if (HANDLERS.getName().equals(attributeName)) {
+                // We use a DelayedHandler on the root logger and we'll add the handlers to that handler to activate it
+                WildFlyDelayedHandler.setHandlers(logger, HANDLERS.getHandlers(configuration, context, resolvedValue, true));
+            } else if (USE_PARENT_HANDLERS.getName().equals(attributeName) && !loggerName.equals(ROOT_LOGGER_NAME)) {
+                logger.setUseParentHandlers(resolvedValue.asBoolean());
             }
             return false;
+        }
+
+        @Override
+        protected void revertUpdateToRuntime(final OperationContext context, final ModelNode operation,
+                                             final String attributeName, final ModelNode valueToRestore,
+                                             final ModelNode valueToRevert, final Logger handback) throws OperationFailedException {
+            final var configuration = Logging.getContextConfiguration(context.getCurrentAddress());
+            if (LEVEL.getName().equals(attributeName)) {
+                handback.setLevel(configuration.getContext().getLevelForName(valueToRestore.asString()));
+            } else if (FILTER.getName().equals(attributeName)) {
+                // Filter should be replaced by the filter-spec in the super class
+                // TODO (jrp) how do we get the filter-spec value?
+                handback.setFilter(Filters.createFilter(configuration, valueToRestore.asStringOrNull()));
+                //handleProperty(FILTER_SPEC, context, value, configuration, false);
+            } else if (FILTER_SPEC.getName().equals(attributeName)) {
+                handback.setFilter(Filters.createFilter(configuration, valueToRestore.asStringOrNull()));
+            } else if (HANDLERS.getName().equals(attributeName)) {
+                // We use a DelayedHandler on the root logger and we'll add the handlers to that handler to activate it
+                WildFlyDelayedHandler.setHandlers(handback, HANDLERS.getHandlers(configuration, context, valueToRestore, true));
+            } else if (USE_PARENT_HANDLERS.getName().equals(attributeName) && !handback.getName()
+                    .equals(ROOT_LOGGER_NAME)) {
+                handback.setUseParentHandlers(valueToRestore.asBoolean());
+            }
         }
 
         @Override
@@ -167,8 +186,9 @@ final class LoggerOperations {
             if (CommonAttributes.FILTER.getName().equals(attributeName)) {
                 final String filterSpec = Filters.filterToFilterSpec(newValue);
                 final ModelNode filterSpecValue = (filterSpec.isEmpty() ? new ModelNode() : new ModelNode(filterSpec));
-                // Undefine the filter-spec
-                model.getModel().get(LoggerAttributes.FILTER_SPEC.getName()).set(filterSpecValue);
+                // Undefine the filter and set the filter-spec
+                model.getModel().get(FILTER.getName()).set(new ModelNode());
+                model.getModel().get(FILTER_SPEC.getName()).set(filterSpecValue);
             }
         }
     }
@@ -176,121 +196,113 @@ final class LoggerOperations {
     /**
      * A step handler to remove a logger
      */
-    static final OperationStepHandler REMOVE_LOGGER = new LoggingOperations.LoggingRemoveOperationStepHandler() {
+    static final OperationStepHandler REMOVE_LOGGER = new AbstractRemoveStepHandler() {
+        @Override
+        protected void performRuntime(final OperationContext context, final ModelNode operation, final ModelNode model) {
+            final var configuration = Logging.getContextConfiguration(context.getCurrentAddress());
+            final var loggerName = context.getCurrentAddressValue();
+            final var logger = configuration.getContext().getLogger(loggerName);
+            // Reset the logger
+            logger.setFilter(null);
+            logger.clearHandlers();
+            logger.setLevel(Level.ALL);
+            logger.setUseParentHandlers(true);
+        }
 
         @Override
-        public void performRuntime(final OperationContext context, final ModelNode operation, final ModelNode model, final LogContextConfiguration logContextConfiguration) throws OperationFailedException {
-            // Disable the logger before removing it
-            final String loggerName = getLogManagerLoggerName(context.getCurrentAddressValue());
-            final LoggerConfiguration configuration = logContextConfiguration.getLoggerConfiguration(loggerName);
-            if (configuration == null) {
-                throw createOperationFailure(LoggingLogger.ROOT_LOGGER.loggerNotFound(loggerName));
-            }
-            logContextConfiguration.removeLoggerConfiguration(loggerName);
+        protected void recoverServices(final OperationContext context, final ModelNode operation, final ModelNode model) throws OperationFailedException {
+            // TODO (jrp) implement this
+            super.recoverServices(context, operation, model);
         }
     };
 
     /**
      * A step handler to add a handler.
      */
-    static final OperationStepHandler ADD_HANDLER = new LoggerUpdateOperationStepHandler(HANDLERS) {
+    static final OperationStepHandler ADD_HANDLER = (context, operation) -> {
+        final Resource resource = context.readResourceForUpdate(PathAddress.EMPTY_ADDRESS);
+        final ModelNode model = resource.getModel();
+        final String handlerName = operation.get(HANDLER_NAME.getName()).asString();
+        model.get(HANDLERS.getName()).add(handlerName);
+        HANDLER.addCapabilityRequirements(context, resource, new ModelNode(handlerName));
 
-        @Override
-        public void updateModel(final OperationContext context, final ModelNode operation, final ModelNode model) throws OperationFailedException {
-            final Resource resource = context.readResourceForUpdate(PathAddress.EMPTY_ADDRESS);
-            final ModelNode handlerName = operation.get(HANDLER_NAME.getName());
-            // Get the current handlers, add the handler and set the model value
-            final ModelNode handlers = model.get(HANDLERS.getName()).clone();
-            if (!handlers.isDefined()) {
-                handlers.setEmptyList();
-            }
-            handlers.add(handlerName);
-            HANDLERS.getValidator().validateParameter(HANDLERS.getName(), handlers);
-            model.get(HANDLERS.getName()).add(handlerName);
-            HANDLER.addCapabilityRequirements(context, resource, handlerName);
-        }
-
-        @Override
-        public void performRuntime(final OperationContext context, final ModelNode operation, final LoggerConfiguration configuration, final String name, final ModelNode model) throws OperationFailedException {
-            // Get the handler name, uses the operation to get the single handler name being added
-            final String handlerName = HANDLER_NAME.resolveModelAttribute(context, operation).asString();
-            final String loggerName = getLogManagerLoggerName(name);
-            if (configuration.getHandlerNames().contains(handlerName)) {
-                LoggingLogger.ROOT_LOGGER.tracef("Handler %s is already assigned to logger %s", handlerName, loggerName);
+        // TODO (jrp) we likely need this to be done very last so more nesting
+        context.addStep(nestRuntime(1, (runtimeContext, runtimeOperation) -> {
+            // Find the handler to remove
+            final var configuration = Logging.getContextConfiguration(context.getCurrentAddress());
+            final var handler = configuration.getHandler(handlerName);
+            final Logger logger = configuration.getContext()
+                    .getLogger(getLogManagerLoggerName(context.getCurrentAddressValue()));
+            if (handler != null) {
+                logger.addHandler(handler);
             } else {
-                LoggingLogger.ROOT_LOGGER.tracef("Adding handler '%s' to logger '%s' at '%s'", handlerName, getLogManagerLoggerName(loggerName), context.getCurrentAddress());
-                configuration.addHandlerName(handlerName);
+                throw new OperationFailedException(LoggingLogger.ROOT_LOGGER.handlerConfigurationNotFound(handlerName));
             }
-        }
+            runtimeContext.completeStep((rollbackContext, rollbackOperation) -> {
+                logger.removeHandler(handler);
+            });
+
+        }), OperationContext.Stage.RUNTIME);
     };
 
     /**
      * A step handler to remove a handler.
      */
-    static final OperationStepHandler REMOVE_HANDLER = new LoggerUpdateOperationStepHandler(HANDLERS) {
+    static final OperationStepHandler REMOVE_HANDLER = (context, operation) -> {
+        final Resource resource = context.readResourceForUpdate(PathAddress.EMPTY_ADDRESS);
+        final ModelNode model = resource.getModel();
+        final String handlerName = operation.get(HANDLER_NAME.getName()).asString();
+        final List<ModelNode> newHandlers = model.get(HANDLERS.getName())
+                .asList()
+                .stream()
+                .filter(name -> !handlerName.equals(name.asString()))
+                .collect(Collectors.toList());
+        model.get(HANDLERS.getName()).set(newHandlers);
+        HANDLER.removeCapabilityRequirements(context, resource, new ModelNode(handlerName));
 
-        @Override
-        public void updateModel(final OperationContext context, final ModelNode operation, final ModelNode model) {
-            final Resource resource = context.readResourceForUpdate(PathAddress.EMPTY_ADDRESS);
-            final String handlerName = operation.get(HANDLER_NAME.getName()).asString();
-            // Create a new handler list for the model
-            boolean found = false;
-            final List<ModelNode> handlers = model.get(HANDLERS.getName()).asList();
-            final List<ModelNode> newHandlers = new ArrayList<>(handlers.size());
-            for (ModelNode handler : handlers) {
-                if (handlerName.equals(handler.asString())) {
-                    HANDLER.removeCapabilityRequirements(context, resource, handler);
-                    found = true;
-                } else {
-                    newHandlers.add(handler);
+        // TODO (jrp) we likely need this to be done very last so more nesting
+        context.addStep(nestRuntime(1, (runtimeContext, runtimeOperation) -> {
+            // Find the handler to remove
+            final var configuration = Logging.getContextConfiguration(context.getCurrentAddress());
+            final var handler = configuration.getHandler(handlerName);
+            final Logger logger = configuration.getContext()
+                    .getLogger(getLogManagerLoggerName(context.getCurrentAddressValue()));
+            if (handler != null) {
+                logger.removeHandler(handler);
+            }
+            runtimeContext.completeStep((rollbackContext, rollbackOperation) -> {
+                if (handler != null) {
+                    logger.addHandler(handler);
                 }
-            }
-            if (found) {
-                model.get(HANDLERS.getName()).set(newHandlers);
-            }
-        }
+            });
 
-        @Override
-        public void performRuntime(final OperationContext context, final ModelNode operation, final LoggerConfiguration configuration, final String name, final ModelNode model) throws OperationFailedException {
-            // Uses the operation to get the single handler name being added
-            configuration.removeHandlerName(HANDLER_NAME.resolveModelAttribute(context, operation).asString());
-        }
+        }), OperationContext.Stage.RUNTIME);
     };
 
     /**
      * A step handler to remove a handler.
      */
-    static final OperationStepHandler CHANGE_LEVEL = new LoggerUpdateOperationStepHandler(LEVEL) {
+    static final OperationStepHandler CHANGE_LEVEL = (context, operation) -> {
+        final Resource resource = context.readResourceForUpdate(PathAddress.EMPTY_ADDRESS);
+        final ModelNode model = resource.getModel();
+        final ModelNode currentValue = model.get(LEVEL.getName());
+        LEVEL.validateAndSet(operation, model);
+        final ModelNode newLevel = model.get(LEVEL.getName());
 
-        @Override
-        public void performRuntime(final OperationContext context, final ModelNode operation, final LoggerConfiguration configuration, final String name, final ModelNode model) throws OperationFailedException {
-            handleProperty(LEVEL, context, model, configuration);
-        }
+        // TODO (jrp) we likely need this to be done very last so more nesting
+        context.addStep(nestRuntime(1, (runtimeContext, runtimeOperation) -> {
+            // Find the handler to remove
+            final var configuration = Logging.getContextConfiguration(context.getCurrentAddress());
+            final Logger logger = configuration.getContext()
+                    .getLogger(getLogManagerLoggerName(context.getCurrentAddressValue()));
+            logger.setLevel(configuration.getContext().getLevelForName(newLevel.asString()));
+            runtimeContext.completeStep((rollbackContext, rollbackOperation) -> {
+                logger.setLevel(configuration.getContext().getLevelForName(currentValue.asString()));
+            });
+
+        }), OperationContext.Stage.RUNTIME);
+
     };
-
-    private static void handleProperty(final AttributeDefinition attribute, final OperationContext context, final ModelNode model,
-                                       final LoggerConfiguration configuration) throws OperationFailedException {
-        handleProperty(attribute, context, model, configuration, true);
-    }
-
-    private static void handleProperty(final AttributeDefinition attribute, final OperationContext context, final ModelNode model,
-                                       final LoggerConfiguration configuration, final boolean resolveValue) throws OperationFailedException {
-        if (FILTER_SPEC.equals(attribute)) {
-            final ModelNode valueNode = (resolveValue ? FILTER_SPEC.resolveModelAttribute(context, model) : model);
-            final String resolvedValue = (valueNode.isDefined() ? valueNode.asString() : null);
-            configuration.setFilter(resolvedValue);
-        } else if (LEVEL.equals(attribute)) {
-            final String resolvedValue = (resolveValue ? LEVEL.resolvePropertyValue(context, model) : LEVEL.resolver().resolveValue(context, model));
-            configuration.setLevel(resolvedValue);
-        } else if (HANDLERS.equals(attribute)) {
-            final Collection<String> resolvedValue = (resolveValue ? HANDLERS.resolvePropertyValue(context, model) : HANDLERS.resolver().resolveValue(context, model));
-            configuration.setHandlerNames(resolvedValue);
-        } else if (USE_PARENT_HANDLERS.equals(attribute)) {
-            final ModelNode useParentHandlers = (resolveValue ? USE_PARENT_HANDLERS.resolveModelAttribute(context, model) : model);
-            final Boolean resolvedValue = (useParentHandlers.isDefined() ? useParentHandlers.asBoolean() : null);
-            configuration.setUseParentHandlers(resolvedValue);
-        }
-    }
 
     /**
      * Returns the logger name that should be used in the log manager.
@@ -301,5 +313,14 @@ final class LoggerOperations {
      */
     private static String getLogManagerLoggerName(final String name) {
         return (name.equals(RESOURCE_NAME) ? CommonAttributes.ROOT_LOGGER_NAME : name);
+    }
+
+    private static OperationStepHandler nestRuntime(final int level, final OperationStepHandler handler) {
+        if (level == 0) {
+            return handler;
+        }
+        return nestRuntime(level - 1, ((context, operation) -> {
+            context.addStep(handler, OperationContext.Stage.RUNTIME);
+        }));
     }
 }

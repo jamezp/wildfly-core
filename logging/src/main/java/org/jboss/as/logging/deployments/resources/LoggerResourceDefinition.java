@@ -1,23 +1,20 @@
 /*
  * JBoss, Home of Professional Open Source.
- * Copyright 2015, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
  *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
+ * Copyright 2023 Red Hat, Inc., and individual contributors
+ * as indicated by the @author tags.
  *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package org.jboss.as.logging.deployments.resources;
@@ -29,11 +26,10 @@ import org.jboss.as.controller.SimpleListAttributeDefinition;
 import org.jboss.as.controller.SimpleResourceDefinition;
 import org.jboss.as.controller.registry.ManagementResourceRegistration;
 import org.jboss.as.logging.LoggingExtension;
-import org.jboss.as.logging.loggers.RootLoggerResourceDefinition;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.ModelType;
-import org.jboss.logmanager.config.LogContextConfiguration;
-import org.jboss.logmanager.config.LoggerConfiguration;
+import org.jboss.logmanager.Logger;
+import org.jboss.logmanager.configuration.ContextConfiguration;
 
 /**
  * Describes a logger used on a deployment.
@@ -71,44 +67,44 @@ class LoggerResourceDefinition extends SimpleResourceDefinition {
 
     @Override
     public void registerAttributes(final ManagementResourceRegistration resourceRegistration) {
-        resourceRegistration.registerReadOnlyAttribute(LEVEL, new LoggerConfigurationReadStepHandler() {
+        resourceRegistration.registerReadOnlyAttribute(LEVEL, new LoggingConfigurationReadStepHandler() {
             @Override
-            protected void updateModel(final LoggerConfiguration configuration, final ModelNode model) {
-                setModelValue(model, configuration.getLevel());
-            }
-        });
-        resourceRegistration.registerReadOnlyAttribute(FILTER, new LoggerConfigurationReadStepHandler() {
-            @Override
-            protected void updateModel(final LoggerConfiguration configuration, final ModelNode model) {
-                setModelValue(model, configuration.getFilter());
-            }
-        });
-        resourceRegistration.registerReadOnlyAttribute(HANDLERS, new LoggerConfigurationReadStepHandler() {
-            @Override
-            protected void updateModel(final LoggerConfiguration configuration, final ModelNode model) {
-                final ModelNode handlers = model.setEmptyList();
-                for (String s : configuration.getHandlerNames()) {
-                    handlers.add(s);
+            protected void updateModel(final ContextConfiguration configuration, final String name, final ModelNode model) {
+                final Logger logger = configuration.getLogger(name);
+                if (logger != null) {
+                    setModelValue(model, logger.getLevel());
                 }
             }
         });
-        resourceRegistration.registerReadOnlyAttribute(USE_PARENT_HANDLERS, new LoggerConfigurationReadStepHandler() {
+        resourceRegistration.registerReadOnlyAttribute(FILTER, new LoggingConfigurationReadStepHandler() {
             @Override
-            protected void updateModel(final LoggerConfiguration configuration, final ModelNode model) {
-                setModelValue(model, configuration.getUseParentHandlers());
+            protected void updateModel(final ContextConfiguration configuration, final String name, final ModelNode model) {
+                final Logger logger = configuration.getLogger(name);
+                if (logger != null) {
+                    // TODO (jrp) we need the filter/filter-spec
+                    setModelValue(model, logger.getFilter());
+                }
             }
         });
-    }
-
-    abstract static class LoggerConfigurationReadStepHandler extends LoggingConfigurationReadStepHandler {
-        @Override
-        protected void updateModel(final LogContextConfiguration logContextConfiguration, final String name, final ModelNode model) {
-            final LoggerConfiguration configuration = logContextConfiguration.getLoggerConfiguration(RootLoggerResourceDefinition.RESOURCE_NAME.equals(name) ? "" : name);
-            updateModel(configuration, model);
-
-        }
-
-        protected abstract void updateModel(LoggerConfiguration configuration, ModelNode model);
+        resourceRegistration.registerReadOnlyAttribute(HANDLERS, new LoggingConfigurationReadStepHandler() {
+            @Override
+            protected void updateModel(final ContextConfiguration configuration, final String name, final ModelNode model) {
+                final Logger logger = configuration.getLogger(name);
+                if (logger != null) {
+                    // TODO (jrp) we need the handler names
+                    setModelValue(model, logger.getHandlers());
+                }
+            }
+        });
+        resourceRegistration.registerReadOnlyAttribute(USE_PARENT_HANDLERS, new LoggingConfigurationReadStepHandler() {
+            @Override
+            protected void updateModel(final ContextConfiguration configuration, final String name, final ModelNode model) {
+                final Logger logger = configuration.getLogger(name);
+                if (logger != null) {
+                    setModelValue(model, logger.getUseParentHandlers());
+                }
+            }
+        });
     }
 
 }

@@ -26,6 +26,7 @@ import static org.jboss.logging.Logger.Level.ERROR;
 import static org.jboss.logging.Logger.Level.WARN;
 
 import java.io.File;
+import java.nio.file.Path;
 import java.util.Collection;
 import java.util.Set;
 
@@ -44,7 +45,6 @@ import org.jboss.logging.annotations.MessageLogger;
 import org.jboss.logging.annotations.Once;
 import org.jboss.logging.annotations.Transform;
 import org.jboss.logging.annotations.Transform.TransformType;
-import org.jboss.logmanager.Configurator;
 import org.jboss.logmanager.LogContext;
 
 /**
@@ -158,7 +158,7 @@ public interface LoggingLogger extends BasicLogger {
      */
     @LogMessage(level = WARN)
     @Message(id = 13, value = "A configurator class, '%s', is not a known configurator and will be replaced.")
-    void replacingConfigurator(@Transform(TransformType.GET_CLASS) Configurator c);
+    void replacingConfigurator(@Transform(TransformType.GET_CLASS) Object c);
 
     /**
      * Logs an error message indicating the {@link org.jboss.logmanager.LogContext log context} associated with the
@@ -878,6 +878,16 @@ public interface LoggingLogger extends BasicLogger {
      */
     @Message(id = 83, value = "Path '%s' is a directory and cannot be used as a log file.")
     OperationFailedException invalidLogFile(String path);
+
+    /**
+     * Creates an exception indicating the path is a directory and cannot be used as a log file.
+     *
+     * @param cause the cause of the failure
+     * @param path  the path attempting to be used as a log file
+     *
+     * @return an {@link org.jboss.as.controller.OperationFailedException} for the error.
+     */
+    OperationFailedException invalidLogFile(@Cause Throwable cause, Path path);
 
     /**
      * Create a failure description message indicating that the resource of given type can not be registered.

@@ -24,6 +24,9 @@ import static org.jboss.as.logging.Logging.createOperationFailure;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamWriter;
 
+import org.jboss.as.controller.AbstractAddStepHandler;
+import org.jboss.as.controller.AbstractRemoveStepHandler;
+import org.jboss.as.controller.AbstractWriteAttributeHandler;
 import org.jboss.as.controller.AttributeDefinition;
 import org.jboss.as.controller.DefaultAttributeMarshaller;
 import org.jboss.as.controller.ObjectTypeAttributeDefinition;
@@ -31,22 +34,21 @@ import org.jboss.as.controller.OperationContext;
 import org.jboss.as.controller.OperationFailedException;
 import org.jboss.as.controller.OperationStepHandler;
 import org.jboss.as.controller.PathElement;
+import org.jboss.as.controller.SimpleAttributeDefinition;
+import org.jboss.as.controller.SimpleAttributeDefinitionBuilder;
 import org.jboss.as.controller.SimpleResourceDefinition;
 import org.jboss.as.controller.registry.ManagementResourceRegistration;
+import org.jboss.as.controller.registry.Resource;
 import org.jboss.as.controller.transform.description.ResourceTransformationDescriptionBuilder;
 import org.jboss.as.logging.KnownModelVersion;
+import org.jboss.as.logging.Logging;
 import org.jboss.as.logging.LoggingExtension;
-import org.jboss.as.logging.LoggingOperations;
-import org.jboss.as.logging.LoggingOperations.LoggingWriteAttributeHandler;
-import org.jboss.as.logging.PropertyAttributeDefinition;
 import org.jboss.as.logging.TransformerResourceDefinition;
 import org.jboss.as.logging.capabilities.Capabilities;
 import org.jboss.as.logging.logging.LoggingLogger;
 import org.jboss.as.logging.validators.RegexValidator;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.ModelType;
-import org.jboss.logmanager.config.FormatterConfiguration;
-import org.jboss.logmanager.config.LogContextConfiguration;
 import org.jboss.logmanager.formatters.PatternFormatter;
 
 /**
@@ -60,19 +62,18 @@ public class PatternFormatterResourceDefinition extends SimpleResourceDefinition
 
     public static final String DEFAULT_FORMATTER_SUFFIX = "-wfcore-pattern-formatter";
 
-    public static String getDefaultFomatterName(String name) {
+    public static String getDefaultFormatterName(String name) {
         return name + DEFAULT_FORMATTER_SUFFIX;
     }
 
     // Pattern formatter options
-    public static final PropertyAttributeDefinition COLOR_MAP = PropertyAttributeDefinition.Builder.of("color-map", ModelType.STRING)
+    public static final SimpleAttributeDefinition COLOR_MAP = SimpleAttributeDefinitionBuilder.create("color-map", ModelType.STRING)
             .setAllowExpression(true)
             .setRequired(false)
-            .setPropertyName("colors")
             .setValidator(new RegexValidator(ModelType.STRING, true, true, COLOR_MAP_VALIDATION_PATTERN))
             .build();
 
-    public static final PropertyAttributeDefinition PATTERN = PropertyAttributeDefinition.Builder.of("pattern", ModelType.STRING, true)
+    public static final SimpleAttributeDefinition PATTERN = SimpleAttributeDefinitionBuilder.create("pattern", ModelType.STRING, true)
             .setAllowExpression(true)
             .setDefaultValue(new ModelNode("%d{HH:mm:ss,SSS} %-5p [%c] (%t) %s%e%n"))
             .build();
@@ -105,7 +106,7 @@ public class PatternFormatterResourceDefinition extends SimpleResourceDefinition
 
     private static final PathElement PATH = PathElement.pathElement(NAME);
 
-    private static final PropertyAttributeDefinition[] ATTRIBUTES = {
+    private static final SimpleAttributeDefinition[] ATTRIBUTES = {
             COLOR_MAP,
             PATTERN,
     };
@@ -114,36 +115,58 @@ public class PatternFormatterResourceDefinition extends SimpleResourceDefinition
     /**
      * A step handler to add a pattern formatter
      */
-    private static final OperationStepHandler ADD = new LoggingOperations.LoggingAddOperationStepHandler(ATTRIBUTES) {
-
+    private static final OperationStepHandler ADD = new AbstractAddStepHandler(ATTRIBUTES) {
         @Override
-        public void performRuntime(final OperationContext context, final ModelNode operation, final ModelNode model, final LogContextConfiguration logContextConfiguration) throws OperationFailedException {
+        protected void performRuntime(final OperationContext context, final ModelNode operation, final ModelNode model) throws OperationFailedException {
             final String name = context.getCurrentAddressValue();
             if (name.endsWith(DEFAULT_FORMATTER_SUFFIX)) {
                 throw LoggingLogger.ROOT_LOGGER.illegalFormatterName();
             }
-            FormatterConfiguration configuration = logContextConfiguration.getFormatterConfiguration(name);
-            if (configuration == null) {
-                LoggingLogger.ROOT_LOGGER.tracef("Adding formatter '%s' at '%s'", name, context.getCurrentAddress());
-                configuration = logContextConfiguration.addFormatterConfiguration(null, PatternFormatter.class.getName(), name);
+            final var configuration = Logging.getContextConfiguration(context.getCurrentAddress());
+            LoggingLogger.ROOT_LOGGER.tracef("Adding formatter '%s' at '%s'", name, context.getCurrentAddress());
+            final var pattern = PATTERN.resolveModelAttribute(context, model).asString();
+            final PatternFormatter patternFormatter;
+            if (model.hasDefined(COLOR_MAP.getName())) {
+                patternFormatter = new PatternFormatter(pattern, COLOR_MAP.resolveModelAttribute(context, model)
+                        .asString());
+            } else {
+                patternFormatter = new PatternFormatter(pattern);
             }
+            configuration.addFormatter(name, () -> patternFormatter);
+        }
 
-            for (PropertyAttributeDefinition attribute : ATTRIBUTES) {
-                attribute.setPropertyValue(context, model, configuration);
-            }
+        @Override
+        protected void rollbackRuntime(final OperationContext context, final ModelNode operation, final Resource resource) {
+            // TODO (jrp) implement this
+            super.rollbackRuntime(context, operation, resource);
         }
     };
 
-    private static final OperationStepHandler WRITE = new LoggingWriteAttributeHandler(ATTRIBUTES) {
+    private static final OperationStepHandler WRITE = new AbstractWriteAttributeHandler<PatternFormatter>(ATTRIBUTES) {
 
         @Override
-        protected boolean applyUpdate(final OperationContext context, final String attributeName, final String addressName, final ModelNode value, final LogContextConfiguration logContextConfiguration) {
-            final FormatterConfiguration configuration = logContextConfiguration.getFormatterConfiguration(addressName);
-            for (PropertyAttributeDefinition attribute : ATTRIBUTES) {
-                if (attribute.getName().equals(attributeName)) {
-                    configuration.setPropertyValueString(attribute.getPropertyName(), value.asString());
-                    break;
-                }
+        protected boolean applyUpdateToRuntime(final OperationContext context, final ModelNode operation, final String attributeName, final ModelNode resolvedValue, final ModelNode currentValue, final HandbackHolder<PatternFormatter> handbackHolder) throws OperationFailedException {
+            return applyUpdate(context, attributeName, resolvedValue);
+        }
+
+        @Override
+        protected void revertUpdateToRuntime(final OperationContext context, final ModelNode operation, final String attributeName, final ModelNode valueToRestore, final ModelNode valueToRevert, final PatternFormatter handback) throws OperationFailedException {
+            applyUpdate(context, attributeName, valueToRestore);
+        }
+
+        private boolean applyUpdate(final OperationContext context, final String attributeName, final ModelNode value) throws OperationFailedException {
+            final String name = context.getCurrentAddressValue();
+            final var configuration = Logging.getContextConfiguration(context.getCurrentAddress());
+            LoggingLogger.ROOT_LOGGER.tracef("Updating formatter '%s' at '%s'", name, context.getCurrentAddress());
+            final var formatter = configuration.getFormatter(name);
+            if (!(formatter instanceof PatternFormatter)) {
+                throw createOperationFailure(LoggingLogger.ROOT_LOGGER.formatterNotFound(name));
+            }
+            final var patternFormatter = (PatternFormatter) formatter;
+            if (attributeName.equals(PATTERN.getName())) {
+                patternFormatter.setPattern(value.asString());
+            } else if (name.equals(COLOR_MAP.getName())) {
+                patternFormatter.setColors(value.asString());
             }
             return false;
         }
@@ -152,16 +175,18 @@ public class PatternFormatterResourceDefinition extends SimpleResourceDefinition
     /**
      * A step handler to remove
      */
-    private static final OperationStepHandler REMOVE = new LoggingOperations.LoggingRemoveOperationStepHandler() {
+    private static final OperationStepHandler REMOVE = new AbstractRemoveStepHandler() {
+        @Override
+        protected void performRuntime(final OperationContext context, final ModelNode operation, final ModelNode model) throws OperationFailedException {
+            final var configuration = Logging.getContextConfiguration(context.getCurrentAddress());
+            // This should not be in-use because the capability check should fail if it is
+            configuration.removeFormatter(context.getCurrentAddressValue());
+        }
 
         @Override
-        public void performRuntime(final OperationContext context, final ModelNode operation, final ModelNode model, final LogContextConfiguration logContextConfiguration) throws OperationFailedException {
-            final String name = context.getCurrentAddressValue();
-            final FormatterConfiguration configuration = logContextConfiguration.getFormatterConfiguration(name);
-            if (configuration == null) {
-                throw createOperationFailure(LoggingLogger.ROOT_LOGGER.formatterNotFound(name));
-            }
-            logContextConfiguration.removeFormatterConfiguration(name);
+        protected void recoverServices(final OperationContext context, final ModelNode operation, final ModelNode model) throws OperationFailedException {
+            // TODO (jrp) need to implement
+            super.recoverServices(context, operation, model);
         }
     };
 

@@ -65,11 +65,11 @@ import org.jboss.as.controller.transform.description.DiscardAttributeChecker;
 import org.jboss.as.controller.transform.description.RejectAttributeChecker;
 import org.jboss.as.controller.transform.description.ResourceTransformationDescriptionBuilder;
 import org.jboss.as.logging.logging.LoggingLogger;
-import org.jboss.as.logging.logmanager.WildFlyLogContextSelector;
 import org.jboss.as.server.ServerEnvironment;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.ModelType;
 import org.jboss.dmr.Property;
+import org.wildfly.core.logmanager.WildFlyLogContextSelector;
 
 /**
  * @author <a href="mailto:tomaz.cerar@redhat.com">Tomaz Cerar</a>
@@ -153,6 +153,7 @@ public class LoggingResourceDefinition extends SimpleResourceDefinition {
 
     private final PathManager pathManager;
 
+    // TODO (jrp) we need to ensure that remove works as expected and doesn't actually remove the child resources
     protected LoggingResourceDefinition(final PathManager pathManager, final WildFlyLogContextSelector contextSelector) {
         super(
                 new Parameters(SUBSYSTEM_PATH, LoggingExtension.getResourceDescriptionResolver())

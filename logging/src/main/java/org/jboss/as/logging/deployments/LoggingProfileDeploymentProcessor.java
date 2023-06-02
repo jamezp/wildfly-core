@@ -26,9 +26,6 @@ import java.util.List;
 import java.util.jar.Manifest;
 
 import org.jboss.as.logging.logging.LoggingLogger;
-import org.jboss.as.logging.LoggingProfileContextSelector;
-import org.jboss.as.logging.logmanager.ConfigurationPersistence;
-import org.jboss.as.logging.logmanager.WildFlyLogContextSelector;
 import org.jboss.as.server.deployment.Attachments;
 import org.jboss.as.server.deployment.DeploymentPhaseContext;
 import org.jboss.as.server.deployment.DeploymentUnit;
@@ -36,7 +33,10 @@ import org.jboss.as.server.deployment.DeploymentUnitProcessingException;
 import org.jboss.as.server.deployment.DeploymentUnitProcessor;
 import org.jboss.as.server.deployment.module.ResourceRoot;
 import org.jboss.logmanager.LogContext;
+import org.jboss.logmanager.configuration.ContextConfiguration;
 import org.jboss.modules.Module;
+import org.wildfly.core.logmanager.WildFlyContextConfiguration;
+import org.wildfly.core.logmanager.WildFlyLogContextSelector;
 
 /**
  * @author <a href="mailto:jperkins@redhat.com">James R. Perkins</a>
@@ -56,14 +56,14 @@ public class LoggingProfileDeploymentProcessor extends AbstractLoggingDeployment
         final String loggingProfile = findLoggingProfile(root);
         if (loggingProfile != null) {
             // Get the profile logging context
-            final LoggingProfileContextSelector loggingProfileContext = LoggingProfileContextSelector.getInstance();
-            if (loggingProfileContext.exists(loggingProfile)) {
+            final ContextConfiguration contextConfiguration = WildFlyContextConfiguration.getInstance(loggingProfile);
+            if (contextConfiguration != null) {
                 // Get the module
                 final Module module = deploymentUnit.getAttachment(Attachments.MODULE);
-                final LogContext logContext = loggingProfileContext.get(loggingProfile);
+                final LogContext logContext = contextConfiguration.getContext();
                 LoggingLogger.ROOT_LOGGER.tracef("Registering log context '%s' on '%s' for profile '%s'", logContext, root, loggingProfile);
                 registerLogContext(deploymentUnit, module, logContext);
-                loggingConfigurationService = new LoggingConfigurationService(ConfigurationPersistence.getConfigurationPersistence(logContext), "profile-" + loggingProfile);
+                loggingConfigurationService = new LoggingConfigurationService(contextConfiguration, "profile-" + loggingProfile);
                 // Process sub-deployments
                 for (DeploymentUnit subDeployment : subDeployments) {
                     // Set the result to true if a logging profile was found

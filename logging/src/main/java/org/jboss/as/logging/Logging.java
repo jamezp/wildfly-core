@@ -26,8 +26,12 @@ import java.util.Arrays;
 import java.util.Set;
 
 import org.jboss.as.controller.OperationFailedException;
+import org.jboss.as.controller.PathAddress;
+import org.jboss.as.controller.PathElement;
 import org.jboss.as.controller.registry.AttributeAccess.Flag;
 import org.jboss.dmr.ModelNode;
+import org.jboss.logmanager.configuration.ContextConfiguration;
+import org.wildfly.core.logmanager.WildFlyContextConfiguration;
 
 /**
  * A set of utilities for the logging subsystem.
@@ -38,6 +42,37 @@ import org.jboss.dmr.ModelNode;
 public final class Logging {
 
     private Logging() {
+    }
+
+    public static ContextConfiguration getContextConfiguration(final PathAddress address) {
+        return WildFlyContextConfiguration.getInstance(getLoggingProfileName(address));
+    }
+
+    /**
+     * Gets the logging profile name. If the address is not in a logging profile path, {@code null} is returned.
+     *
+     * @param address the address to check for the logging profile name
+     *
+     * @return the logging profile name or {@code null}
+     */
+    public static String getLoggingProfileName(final PathAddress address) {
+        for (PathElement pathElement : address) {
+            if (CommonAttributes.LOGGING_PROFILE.equals(pathElement.getKey())) {
+                return pathElement.getValue();
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Checks if the address is a logging profile address.
+     *
+     * @param address the address to check for the logging profile
+     *
+     * @return {@code true} if the address is a logging profile address, otherwise {@code false}
+     */
+    public static boolean isLoggingProfileAddress(final PathAddress address) {
+        return getLoggingProfileName(address) != null;
     }
 
     /**

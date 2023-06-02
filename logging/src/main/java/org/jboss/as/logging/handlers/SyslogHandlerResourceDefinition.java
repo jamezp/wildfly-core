@@ -22,20 +22,24 @@ package org.jboss.as.logging.handlers;
 import static org.jboss.as.logging.CommonAttributes.ENABLED;
 import static org.jboss.as.logging.CommonAttributes.LEVEL;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.net.UnknownHostException;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.logging.Formatter;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamWriter;
 
 import org.jboss.as.controller.AttributeDefinition;
 import org.jboss.as.controller.DefaultAttributeMarshaller;
 import org.jboss.as.controller.OperationContext;
+import org.jboss.as.controller.OperationFailedException;
 import org.jboss.as.controller.PathElement;
 import org.jboss.as.controller.SimpleAttributeDefinition;
 import org.jboss.as.controller.SimpleAttributeDefinitionBuilder;
-import org.jboss.as.controller.SimpleResourceDefinition;
 import org.jboss.as.controller.operations.validation.EnumValidator;
 import org.jboss.as.controller.operations.validation.IntRangeValidator;
 import org.jboss.as.controller.registry.ManagementResourceRegistration;
@@ -45,16 +49,12 @@ import org.jboss.as.controller.transform.description.ResourceTransformationDescr
 import org.jboss.as.logging.Attribute;
 import org.jboss.as.logging.ElementAttributeMarshaller;
 import org.jboss.as.logging.KnownModelVersion;
-import org.jboss.as.logging.LoggingExtension;
-import org.jboss.as.logging.PropertyAttributeDefinition;
 import org.jboss.as.logging.TransformerResourceDefinition;
-import org.jboss.as.logging.capabilities.Capabilities;
-import org.jboss.as.logging.handlers.HandlerOperations.HandlerAddOperationStepHandler;
-import org.jboss.as.logging.handlers.HandlerOperations.LogHandlerWriteAttributeHandler;
-import org.jboss.as.logging.resolvers.ModelNodeResolver;
 import org.jboss.as.logging.validators.Validators;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.ModelType;
+import org.jboss.logmanager.configuration.ContextConfiguration;
+import org.jboss.logmanager.formatters.PatternFormatter;
 import org.jboss.logmanager.handlers.SyslogHandler;
 import org.jboss.logmanager.handlers.SyslogHandler.Facility;
 import org.jboss.logmanager.handlers.SyslogHandler.SyslogType;
@@ -62,48 +62,45 @@ import org.jboss.logmanager.handlers.SyslogHandler.SyslogType;
 /**
  * @author <a href="mailto:jperkins@redhat.com">James R. Perkins</a>
  */
-public class SyslogHandlerResourceDefinition extends SimpleResourceDefinition {
+public class SyslogHandlerResourceDefinition extends AbstractHandlerDefinition {
 
     public static final String NAME = "syslog-handler";
     private static final PathElement SYSLOG_HANDLER_PATH = PathElement.pathElement(NAME);
 
-    public static final PropertyAttributeDefinition APP_NAME = PropertyAttributeDefinition.Builder.of("app-name", ModelType.STRING, true)
+    public static final SimpleAttributeDefinition APP_NAME = SimpleAttributeDefinitionBuilder.create("app-name", ModelType.STRING, true)
             .setAllowExpression(true)
             .setAttributeMarshaller(ElementAttributeMarshaller.VALUE_ATTRIBUTE_MARSHALLER)
-            .setPropertyName("appName")
             .setValidator(Validators.NOT_EMPTY_NULLABLE_STRING_VALIDATOR)
             .build();
 
-    public static final PropertyAttributeDefinition FACILITY = PropertyAttributeDefinition.Builder.of("facility", ModelType.STRING, true)
+    public static final SimpleAttributeDefinition FACILITY = SimpleAttributeDefinitionBuilder.create("facility", ModelType.STRING, true)
             .setAllowExpression(true)
             .setAttributeMarshaller(ElementAttributeMarshaller.VALUE_ATTRIBUTE_MARSHALLER)
             .setDefaultValue(new ModelNode(FacilityAttribute.USER_LEVEL.toString()))
-            .setResolver(FacilityResolver.INSTANCE)
             .setValidator(EnumValidator.create(FacilityAttribute.class, EnumSet.allOf(FacilityAttribute.class)))
             .build();
 
-    public static final PropertyAttributeDefinition HOSTNAME = PropertyAttributeDefinition.Builder.of("hostname", ModelType.STRING, true)
+    public static final SimpleAttributeDefinition HOSTNAME = SimpleAttributeDefinitionBuilder.create("hostname", ModelType.STRING, true)
             .setAllowExpression(true)
             .setAttributeMarshaller(ElementAttributeMarshaller.VALUE_ATTRIBUTE_MARSHALLER)
             .setValidator(Validators.NOT_EMPTY_NULLABLE_STRING_VALIDATOR)
             .build();
 
-    public static final PropertyAttributeDefinition PORT = PropertyAttributeDefinition.Builder.of("port", ModelType.INT, true)
+    public static final SimpleAttributeDefinition PORT = SimpleAttributeDefinitionBuilder.create("port", ModelType.INT, true)
             .setAllowExpression(true)
             .setAttributeMarshaller(ElementAttributeMarshaller.VALUE_ATTRIBUTE_MARSHALLER)
             .setDefaultValue(new ModelNode(514))
             .setValidator(new IntRangeValidator(0, 65535, true, true))
             .build();
 
-    public static final PropertyAttributeDefinition SERVER_ADDRESS = PropertyAttributeDefinition.Builder.of("server-address", ModelType.STRING, true)
+    public static final SimpleAttributeDefinition SERVER_ADDRESS = SimpleAttributeDefinitionBuilder.create("server-address", ModelType.STRING, true)
             .setAllowExpression(true)
             .setAttributeMarshaller(ElementAttributeMarshaller.VALUE_ATTRIBUTE_MARSHALLER)
             .setDefaultValue(new ModelNode("localhost"))
-            .setPropertyName("serverHostname")
             .setValidator(Validators.NOT_EMPTY_NULLABLE_STRING_VALIDATOR)
             .build();
 
-    public static final PropertyAttributeDefinition SYSLOG_FORMATTER = PropertyAttributeDefinition.Builder.of("syslog-format", ModelType.STRING, true)
+    public static final SimpleAttributeDefinition SYSLOG_FORMATTER = SimpleAttributeDefinitionBuilder.create("syslog-format", ModelType.STRING, true)
             .setAllowExpression(true)
             .setAttributeMarshaller(new DefaultAttributeMarshaller() {
                 @Override
@@ -120,7 +117,6 @@ public class SyslogHandlerResourceDefinition extends SimpleResourceDefinition {
                 }
             })
             .setDefaultValue(new ModelNode(SyslogType.RFC5424.name()))
-            .setPropertyName("syslogType")
             .setValidator(EnumValidator.create(SyslogType.class, EnumSet.allOf(SyslogType.class)))
             .build();
 
@@ -146,22 +142,16 @@ public class SyslogHandlerResourceDefinition extends SimpleResourceDefinition {
             NAMED_FORMATTER
     };
 
-    private static final HandlerAddOperationStepHandler ADD_HANDLER = new HandlerAddOperationStepHandler(SyslogHandler.class, ATTRIBUTES);
-    private static final LogHandlerWriteAttributeHandler WRITE_HANDLER = new LogHandlerWriteAttributeHandler(ATTRIBUTES);
-
     public static final SyslogHandlerResourceDefinition INSTANCE = new SyslogHandlerResourceDefinition();
 
     private SyslogHandlerResourceDefinition() {
-        super(new Parameters(SYSLOG_HANDLER_PATH, LoggingExtension.getResourceDescriptionResolver(NAME))
-                .setAddHandler(ADD_HANDLER)
-                .setRemoveHandler(HandlerOperations.REMOVE_HANDLER)
-                .setCapabilities(Capabilities.HANDLER_CAPABILITY));
+        super(createParameters(SYSLOG_HANDLER_PATH, SyslogAddStepHandler.INSTANCE), false, SyslogWriteStepHandler.INSTANCE, ATTRIBUTES);
     }
 
     @Override
     public void registerAttributes(final ManagementResourceRegistration resourceRegistration) {
         for (AttributeDefinition def : ATTRIBUTES) {
-            resourceRegistration.registerReadWriteAttribute(def, null, WRITE_HANDLER);
+            resourceRegistration.registerReadWriteAttribute(def, null, SyslogWriteStepHandler.INSTANCE);
         }
     }
 
@@ -252,12 +242,77 @@ public class SyslogHandlerResourceDefinition extends SimpleResourceDefinition {
         }
     }
 
-    static class FacilityResolver implements ModelNodeResolver<String> {
-        static final FacilityResolver INSTANCE = new FacilityResolver();
+    private static class SyslogAddStepHandler extends AbstractHandlerAddStepHandler<SyslogHandler> {
+        private static final SyslogAddStepHandler INSTANCE = new SyslogAddStepHandler();
+
+        SyslogAddStepHandler() {
+            super(false, ATTRIBUTES);
+        }
 
         @Override
-        public String resolveValue(final OperationContext context, final ModelNode value) {
-            return FacilityAttribute.fromString(value.asString()).getFacility().name();
+        void performRuntime(final OperationContext context, final ModelNode operation, final ModelNode model, final SyslogHandler handler, final ContextConfiguration configuration, final String name) throws OperationFailedException {
+            final var appName = APP_NAME.resolveModelAttribute(context, model);
+            final var hostname = HOSTNAME.resolveModelAttribute(context, model);
+            final var facility = FACILITY.resolveModelAttribute(context, model).asString();
+            final var syslogFormat = SYSLOG_FORMATTER.resolveModelAttribute(context, model).asString();
+
+            if (appName.isDefined()) {
+                handler.setAppName(appName.asString());
+            }
+            if (hostname.isDefined()) {
+                handler.setHostname(hostname.asString());
+            }
+            handler.setFacility(FacilityAttribute.fromString(facility).facility);
+            handler.setSyslogType(SyslogType.valueOf(syslogFormat));
+        }
+
+        @Override
+        SyslogHandler createHandler(final OperationContext context, final ModelNode operation, final ModelNode model,
+                                    final ContextConfiguration configuration, final String name) throws OperationFailedException {
+            final var serverAddress = SERVER_ADDRESS.resolveModelAttribute(context, model).asString();
+            final var port = PORT.resolveModelAttribute(context, model).asInt();
+            try {
+                return new SyslogHandler(serverAddress, port);
+            } catch (IOException e) {
+                // TODO (jrp) i18n
+                throw new UncheckedIOException(e);
+            }
+        }
+    }
+
+    private static class SyslogWriteStepHandler extends AbstractHandlerWriteStepHandler<SyslogHandler> {
+        private static final SyslogWriteStepHandler INSTANCE = new SyslogWriteStepHandler();
+
+        protected SyslogWriteStepHandler() {
+            super(false, ATTRIBUTES);
+        }
+
+        @Override
+        void applyUpdateToRuntime(final OperationContext context, final String attributeName, final ModelNode resolvedValue,
+                                  final ModelNode currentValue, final ContextConfiguration configuration, final SyslogHandler handler) throws OperationFailedException {
+            if (attributeName.equals(APP_NAME.getName())) {
+                handler.setAppName(resolvedValue.asString());
+            } else if (attributeName.equals(HOSTNAME.getName())) {
+                handler.setHostname(resolvedValue.asString());
+            } else if (attributeName.equals(FACILITY.getName())) {
+                handler.setFacility(FacilityAttribute.fromString(resolvedValue.asString()).getFacility());
+            } else if (attributeName.equals(SYSLOG_FORMATTER.getName())) {
+                handler.setSyslogType(SyslogType.valueOf(resolvedValue.asString()));
+            } else if (attributeName.equals(SERVER_ADDRESS.getName())) {
+                try {
+                    handler.setServerHostname(resolvedValue.asString());
+                } catch (UnknownHostException e) {
+                    // TODO (jrp) i18n
+                    throw new UncheckedIOException(e);
+                }
+            } else if (attributeName.equals(PORT.getName())) {
+                handler.setPort(resolvedValue.asInt());
+            }
+        }
+
+        @Override
+        Formatter createDefaultFormatter() {
+            return new PatternFormatter("%s");
         }
     }
 }

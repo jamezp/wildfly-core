@@ -1,26 +1,29 @@
 /*
  * JBoss, Home of Professional Open Source.
- * Copyright 2013, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
  *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
+ * Copyright 2023 Red Hat, Inc., and individual contributors
+ * as indicated by the @author tags.
  *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
-package org.jboss.as.logging.logmanager;
+package org.wildfly.core.logmanager;
+
+import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 import org.jboss.logmanager.ClassLoaderLogContextSelector;
 import org.jboss.logmanager.LogContext;
@@ -35,6 +38,9 @@ class WildFlyLogContextSelectorImpl implements WildFlyLogContextSelector {
     private final ClassLoaderLogContextSelector contextSelector;
 
     private final ThreadLocal<LogContext> localContext = new ThreadLocal<>();
+
+    private final ConcurrentMap<String, LogContext> profileContexts = new ConcurrentHashMap<>();
+    private final Lock lock;
     private int counter;
     private int dftCounter;
 
@@ -57,6 +63,7 @@ class WildFlyLogContextSelectorImpl implements WildFlyLogContextSelector {
         counter = 0;
         dftCounter = 0;
         contextSelector = new ClassLoaderLogContextSelector(dft, true);
+        this.lock = new ReentrantLock();
     }
 
     @Override
@@ -65,9 +72,13 @@ class WildFlyLogContextSelectorImpl implements WildFlyLogContextSelector {
         if (localContext != null) {
             return localContext;
         }
+        // Not sure where, but there seems to be a race condition here.
         final int counter;
-        synchronized (this) {
+        lock.lock();
+        try {
             counter = this.counter;
+        } finally {
+            lock.unlock();
         }
         // If we have no registered contexts we can just use the default selector. This should improve performance
         // in most cases as the call stack will not be walked. This does depend on the on what was used for the
@@ -93,7 +104,8 @@ class WildFlyLogContextSelectorImpl implements WildFlyLogContextSelector {
         // We want to register regardless of the current counter for cases when a different log context is registered
         // later.
         contextSelector.registerLogContext(classLoader, logContext);
-        synchronized (this) {
+        lock.lock();
+        try {
             if (counter > 0) {
                 counter++;
             } else if (logContext != defaultLogContextSelector.getLogContext()) {
@@ -104,13 +116,16 @@ class WildFlyLogContextSelectorImpl implements WildFlyLogContextSelector {
                 // We're using the default log context at this point
                 dftCounter++;
             }
+        } finally {
+            lock.unlock();
         }
     }
 
     @Override
     public boolean unregisterLogContext(final ClassLoader classLoader, final LogContext logContext) {
         if (contextSelector.unregisterLogContext(classLoader, logContext)) {
-            synchronized (this) {
+            lock.lock();
+            try {
                 if (counter > 0) {
                     counter--;
                 } else if (dftCounter > 0) {
@@ -118,6 +133,8 @@ class WildFlyLogContextSelectorImpl implements WildFlyLogContextSelector {
                     // registered log contexts must be the default log context.
                     dftCounter--;
                 }
+            } finally {
+                lock.unlock();
             }
             return true;
         }
@@ -136,8 +153,44 @@ class WildFlyLogContextSelectorImpl implements WildFlyLogContextSelector {
 
     @Override
     public int registeredCount() {
-        synchronized (this) {
+        lock.lock();
+        try {
             return counter;
+        } finally {
+            lock.unlock();
         }
+    }
+
+    @Override
+    public LogContext getOrCreateProfile(final String profileName) {
+        LogContext result = profileContexts.get(profileName);
+        if (result == null) {
+            result = LogContext.create();
+            final LogContext current = profileContexts.putIfAbsent(profileName, result);
+            if (current != null) {
+                result = current;
+            }
+        }
+        return result;
+    }
+
+    @Override
+    public LogContext getProfileContext(final String loggingProfile) {
+        return loggingProfile == null ? null : profileContexts.get(loggingProfile);
+    }
+
+    @Override
+    public boolean profileContextExists(final String loggingProfile) {
+        return loggingProfile != null && profileContexts.containsKey(loggingProfile);
+    }
+
+    @Override
+    public LogContext addProfileContext(final String loggingProfile, final LogContext context) {
+        return profileContexts.put(Objects.requireNonNull(loggingProfile), context);
+    }
+
+    @Override
+    public LogContext removeProfileContext(final String loggingProfile) {
+        return profileContexts.remove(loggingProfile);
     }
 }

@@ -22,7 +22,6 @@ package org.jboss.as.logging.loggers;
 import org.jboss.as.controller.SimpleAttributeDefinition;
 import org.jboss.as.controller.SimpleAttributeDefinitionBuilder;
 import org.jboss.as.logging.ElementAttributeMarshaller;
-import org.jboss.as.logging.PropertyAttributeDefinition;
 import org.jboss.as.logging.capabilities.Capabilities;
 import org.jboss.as.logging.handlers.LogHandlerListAttributeDefinition;
 import org.jboss.dmr.ModelType;
@@ -44,7 +43,7 @@ public class LoggerAttributes {
             .setRequired(false)
             .build();
 
-    public static final PropertyAttributeDefinition FILTER_SPEC = PropertyAttributeDefinition.Builder.of("filter-spec", ModelType.STRING, true)
+    public static final SimpleAttributeDefinition FILTER_SPEC = SimpleAttributeDefinitionBuilder.create("filter-spec", ModelType.STRING, true)
             .addAlternatives("filter")
             .setAllowExpression(true)
             .setAttributeMarshaller(ElementAttributeMarshaller.VALUE_ATTRIBUTE_MARSHALLER)

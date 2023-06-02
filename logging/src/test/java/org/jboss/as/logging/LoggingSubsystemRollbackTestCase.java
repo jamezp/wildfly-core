@@ -30,7 +30,6 @@ import org.jboss.as.controller.services.path.PathResourceDefinition;
 import org.jboss.as.logging.handlers.AbstractHandlerDefinition;
 import org.jboss.as.logging.handlers.ConsoleHandlerResourceDefinition;
 import org.jboss.as.logging.loggers.LoggerAttributes;
-import org.jboss.as.logging.logmanager.ConfigurationPersistence;
 import org.jboss.as.subsystem.test.KernelServices;
 import org.jboss.as.subsystem.test.SubsystemOperations;
 import org.jboss.byteman.contrib.bmunit.BMRule;
@@ -38,11 +37,14 @@ import org.jboss.byteman.contrib.bmunit.BMRules;
 import org.jboss.byteman.contrib.bmunit.BMUnitRunner;
 import org.jboss.dmr.ModelNode;
 import org.jboss.logmanager.LogContext;
+import org.jboss.logmanager.configuration.ContextConfiguration;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.wildfly.core.logmanager.WildFlyContextConfiguration;
+import org.wildfly.core.logmanager.WildFlyLogContextSelector;
 
 /**
  * @author <a href="jperkins@redhat.com">James R. Perkins</a>
@@ -79,10 +81,10 @@ public class LoggingSubsystemRollbackTestCase extends AbstractLoggingSubsystemTe
     @Override
     public void clearLogContext() throws Exception {
         super.clearLogContext();
-        final LoggingProfileContextSelector contextSelector = LoggingProfileContextSelector.getInstance();
-        if (contextSelector.exists(PROFILE_NAME)) {
-            contextSelector.get(PROFILE_NAME).close();
-            contextSelector.remove(PROFILE_NAME);
+        final WildFlyLogContextSelector contextSelector = WildFlyLogContextSelector.getContextSelector();
+        if (contextSelector.profileContextExists(PROFILE_NAME)) {
+            contextSelector.getProfileContext(PROFILE_NAME).close();
+            contextSelector.removeProfileContext(PROFILE_NAME);
         }
     }
 
@@ -115,7 +117,7 @@ public class LoggingSubsystemRollbackTestCase extends AbstractLoggingSubsystemTe
         final ModelNode currentModel = getSubsystemModel(kernelServices);
         compare(validSubsystemModel, currentModel);
 
-        final ConfigurationPersistence config = ConfigurationPersistence.getConfigurationPersistence(LogContext.getLogContext());
+        final ContextConfiguration config = WildFlyContextConfiguration.getInstance();
         compare(currentModel, config);
     }
 
@@ -148,7 +150,7 @@ public class LoggingSubsystemRollbackTestCase extends AbstractLoggingSubsystemTe
         final ModelNode currentModel = getSubsystemModel(kernelServices);
         compare(validSubsystemModel, currentModel);
 
-        final ConfigurationPersistence config = ConfigurationPersistence.getConfigurationPersistence(LogContext.getLogContext());
+        final ContextConfiguration config = WildFlyContextConfiguration.getInstance();
         compare(currentModel, config);
     }
 
@@ -185,7 +187,8 @@ public class LoggingSubsystemRollbackTestCase extends AbstractLoggingSubsystemTe
         // create a new handler
         final PathAddress fileHandlerAddress = createFileHandlerAddress("fail-fh");
         final ModelNode fileHandlerOp = SubsystemOperations.createAddOperation(fileHandlerAddress.toModelNode());
-        fileHandlerOp.get(CommonAttributes.FILE.getName(), PathResourceDefinition.RELATIVE_TO.getName()).set("jboss.server.log.dir");
+        fileHandlerOp.get(CommonAttributes.FILE.getName(), PathResourceDefinition.RELATIVE_TO.getName())
+                .set("jboss.server.log.dir");
         fileHandlerOp.get(CommonAttributes.FILE.getName(), PathResourceDefinition.PATH.getName()).set("fail-fh.log");
         fileHandlerOp.get(CommonAttributes.AUTOFLUSH.getName()).set(true);
         operationBuilder.addStep(fileHandlerOp);
@@ -196,13 +199,15 @@ public class LoggingSubsystemRollbackTestCase extends AbstractLoggingSubsystemTe
         operationBuilder.addStep(testLoggerOp);
 
         // add handler to logger
-        operationBuilder.addStep(SubsystemOperations.createWriteAttributeOperation(testLoggerAddress.toModelNode(), LoggerAttributes.HANDLERS, new ModelNode().setEmptyList().add("fail-fh")));
+        operationBuilder.addStep(SubsystemOperations.createWriteAttributeOperation(testLoggerAddress.toModelNode(), LoggerAttributes.HANDLERS, new ModelNode().setEmptyList()
+                .add("fail-fh")));
 
         // remove the console handler
         operationBuilder.addStep(SubsystemOperations.createRemoveOperation(consoleHandler.toModelNode()));
 
         // add handler to existing logger - should force fail on this one
-        operationBuilder.addStep(SubsystemOperations.createWriteAttributeOperation(loggerAddress.toModelNode(), LoggerAttributes.HANDLERS, new ModelNode().setEmptyList().add("fail-fh")));
+        operationBuilder.addStep(SubsystemOperations.createWriteAttributeOperation(loggerAddress.toModelNode(), LoggerAttributes.HANDLERS, new ModelNode().setEmptyList()
+                .add("fail-fh")));
 
         // verify the operation failed
         result = kernelServices.executeOperation(operationBuilder.build().getOperation());
@@ -212,7 +217,7 @@ public class LoggingSubsystemRollbackTestCase extends AbstractLoggingSubsystemTe
         final ModelNode currentModel = getSubsystemModel(kernelServices);
         compare(validSubsystemModel, currentModel);
 
-        final ConfigurationPersistence config = ConfigurationPersistence.getConfigurationPersistence(LogContext.getLogContext());
+        final ContextConfiguration config = WildFlyContextConfiguration.getInstance();
         compare(currentModel, config);
     }
 
@@ -248,7 +253,8 @@ public class LoggingSubsystemRollbackTestCase extends AbstractLoggingSubsystemTe
         // create a new handler
         final PathAddress fileHandlerAddress = createFileHandlerAddress("fail-fh");
         final ModelNode fileHandlerOp = SubsystemOperations.createAddOperation(fileHandlerAddress.toModelNode());
-        fileHandlerOp.get(CommonAttributes.FILE.getName(), PathResourceDefinition.RELATIVE_TO.getName()).set("jboss.server.log.dir");
+        fileHandlerOp.get(CommonAttributes.FILE.getName(), PathResourceDefinition.RELATIVE_TO.getName())
+                .set("jboss.server.log.dir");
         fileHandlerOp.get(CommonAttributes.FILE.getName(), PathResourceDefinition.PATH.getName()).set("fail-fh.log");
         fileHandlerOp.get(CommonAttributes.AUTOFLUSH.getName()).set(true);
         operationBuilder.addStep(fileHandlerOp);
@@ -262,7 +268,8 @@ public class LoggingSubsystemRollbackTestCase extends AbstractLoggingSubsystemTe
         operationBuilder.addStep(SubsystemOperations.createRemoveOperation(consoleHandler.toModelNode()));
 
         // add handler to existing logger - should force fail on this one
-        operationBuilder.addStep(SubsystemOperations.createWriteAttributeOperation(loggerAddress.toModelNode(), LoggerAttributes.HANDLERS, new ModelNode().setEmptyList().add("fail-fh")));
+        operationBuilder.addStep(SubsystemOperations.createWriteAttributeOperation(loggerAddress.toModelNode(), LoggerAttributes.HANDLERS, new ModelNode().setEmptyList()
+                .add("fail-fh")));
 
         // verify the operation failed
         result = kernelServices.executeOperation(operationBuilder.build().getOperation());
@@ -272,7 +279,7 @@ public class LoggingSubsystemRollbackTestCase extends AbstractLoggingSubsystemTe
         final ModelNode currentModel = getSubsystemModel(kernelServices);
         compare(validSubsystemModel, currentModel);
 
-        final ConfigurationPersistence config = ConfigurationPersistence.getConfigurationPersistence(LogContext.getLogContext());
+        final ContextConfiguration config = WildFlyContextConfiguration.getInstance();
         compare(currentModel, config);
     }
 
@@ -381,10 +388,10 @@ public class LoggingSubsystemRollbackTestCase extends AbstractLoggingSubsystemTe
         final ModelNode currentModel = getSubsystemModel(kernelServices);
         compare(validSubsystemModel, currentModel);
 
-        ConfigurationPersistence config = ConfigurationPersistence.getConfigurationPersistence(LogContext.getLogContext());
+        ContextConfiguration config = WildFlyContextConfiguration.getInstance();
         compare(currentModel, config);
         // Check the profile was rolled back
-        config = ConfigurationPersistence.getConfigurationPersistence(LoggingProfileContextSelector.getInstance().get(PROFILE_NAME));
+        config = WildFlyContextConfiguration.getInstance(PROFILE_NAME);
         compare(PROFILE_NAME, currentModel, config);
     }
 
@@ -405,8 +412,9 @@ public class LoggingSubsystemRollbackTestCase extends AbstractLoggingSubsystemTe
         ModelNode currentModel = getSubsystemModel(kernelServices);
         compare(profileName, validSubsystemModel, currentModel);
 
-        final LogContext logContext = (profileName == null ? LogContext.getLogContext() : LoggingProfileContextSelector.getInstance().get(profileName));
-        ConfigurationPersistence config = ConfigurationPersistence.getConfigurationPersistence(logContext);
+        final LogContext logContext = (profileName == null ? LogContext.getLogContext() : WildFlyLogContextSelector.getContextSelector()
+                .getProfileContext(profileName));
+        ContextConfiguration config = WildFlyContextConfiguration.getInstance(logContext);
         compare(profileName, currentModel, config);
 
         // Fail on a logger write attribute
@@ -419,7 +427,7 @@ public class LoggingSubsystemRollbackTestCase extends AbstractLoggingSubsystemTe
         currentModel = getSubsystemModel(kernelServices);
         compare(profileName, validSubsystemModel, currentModel);
 
-        config = ConfigurationPersistence.getConfigurationPersistence(logContext);
+        config = WildFlyContextConfiguration.getInstance(logContext);
         compare(profileName, currentModel, config);
     }
 
@@ -438,8 +446,9 @@ public class LoggingSubsystemRollbackTestCase extends AbstractLoggingSubsystemTe
         ModelNode currentModel = getSubsystemModel(kernelServices);
         compare(profileName, validSubsystemModel, currentModel);
 
-        final LogContext logContext = (profileName == null ? LogContext.getLogContext() : LoggingProfileContextSelector.getInstance().get(profileName));
-        ConfigurationPersistence config = ConfigurationPersistence.getConfigurationPersistence(logContext);
+        final LogContext logContext = (profileName == null ? LogContext.getLogContext() : WildFlyLogContextSelector.getContextSelector()
+                .getProfileContext(profileName));
+        ContextConfiguration config = WildFlyContextConfiguration.getInstance(logContext);
         compare(profileName, currentModel, config);
 
         // Fail on a logger write attribute
@@ -452,7 +461,7 @@ public class LoggingSubsystemRollbackTestCase extends AbstractLoggingSubsystemTe
         currentModel = getSubsystemModel(kernelServices);
         compare(profileName, validSubsystemModel, currentModel);
 
-        config = ConfigurationPersistence.getConfigurationPersistence(logContext);
+        config = WildFlyContextConfiguration.getInstance(logContext);
         compare(profileName, currentModel, config);
 
     }
@@ -473,8 +482,9 @@ public class LoggingSubsystemRollbackTestCase extends AbstractLoggingSubsystemTe
         ModelNode currentModel = getSubsystemModel(kernelServices);
         compare(profileName, validSubsystemModel, currentModel);
 
-        final LogContext logContext = (profileName == null ? LogContext.getLogContext() : LoggingProfileContextSelector.getInstance().get(profileName));
-        ConfigurationPersistence config = ConfigurationPersistence.getConfigurationPersistence(logContext);
+        final LogContext logContext = (profileName == null ? LogContext.getLogContext() : WildFlyLogContextSelector.getContextSelector()
+                .getProfileContext(profileName));
+        ContextConfiguration config = WildFlyContextConfiguration.getInstance(logContext);
         compare(profileName, currentModel, config);
 
         // Fail on a logger write attribute
@@ -488,7 +498,7 @@ public class LoggingSubsystemRollbackTestCase extends AbstractLoggingSubsystemTe
         currentModel = getSubsystemModel(kernelServices);
         compare(profileName, validSubsystemModel, currentModel);
 
-        config = ConfigurationPersistence.getConfigurationPersistence(logContext);
+        config = WildFlyContextConfiguration.getInstance(logContext);
         compare(profileName, currentModel, config);
 
     }
@@ -519,8 +529,9 @@ public class LoggingSubsystemRollbackTestCase extends AbstractLoggingSubsystemTe
         ModelNode currentModel = getSubsystemModel(kernelServices);
         compare(profileName, validSubsystemModel, currentModel);
 
-        final LogContext logContext = (profileName == null ? LogContext.getLogContext() : LoggingProfileContextSelector.getInstance().get(profileName));
-        ConfigurationPersistence config = ConfigurationPersistence.getConfigurationPersistence(logContext);
+        final LogContext logContext = (profileName == null ? LogContext.getLogContext() : WildFlyLogContextSelector.getContextSelector()
+                .getProfileContext(profileName));
+        ContextConfiguration config = WildFlyContextConfiguration.getInstance(logContext);
         compare(profileName, currentModel, config);
 
     }

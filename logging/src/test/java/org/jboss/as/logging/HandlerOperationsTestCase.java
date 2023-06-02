@@ -35,7 +35,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
+import java.util.logging.Handler;
 import java.util.logging.Level;
+import java.util.stream.Stream;
 
 import org.jboss.as.controller.PathAddress;
 import org.jboss.as.controller.client.Operation;
@@ -53,18 +55,18 @@ import org.jboss.as.logging.handlers.SocketHandlerResourceDefinition;
 import org.jboss.as.logging.handlers.Target;
 import org.jboss.as.logging.loggers.LoggerAttributes;
 import org.jboss.as.logging.loggers.LoggerResourceDefinition;
-import org.jboss.as.logging.logmanager.ConfigurationPersistence;
 import org.jboss.as.subsystem.test.KernelServices;
 import org.jboss.as.subsystem.test.SubsystemOperations;
 import org.jboss.dmr.ModelNode;
 import org.jboss.logmanager.LogContext;
 import org.jboss.logmanager.Logger;
-import org.jboss.logmanager.config.HandlerConfiguration;
-import org.jboss.logmanager.config.LogContextConfiguration;
-import org.jboss.logmanager.config.LoggerConfiguration;
+import org.jboss.logmanager.configuration.ContextConfiguration;
+import org.jboss.logmanager.formatters.PatternFormatter;
+import org.jboss.logmanager.handlers.AsyncHandler;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.wildfly.core.logmanager.WildFlyContextConfiguration;
 
 /**
  * @author <a href="mailto:jperkins@redhat.com">James R. Perkins</a>
@@ -136,7 +138,9 @@ public class HandlerOperationsTestCase extends AbstractOperationsTestCase {
         ModelNode op = SubsystemOperations.createAddOperation(handlerAddress);
         op.get(CommonAttributes.LEVEL.getName()).set("INFO");
         op.get(CommonAttributes.ENCODING.getName()).set(ENCODING);
-        op.get(CommonAttributes.FILE.getName()).get(PathResourceDefinition.PATH.getName()).set(logFile.toAbsolutePath().toString());
+        op.get(CommonAttributes.FILE.getName())
+                .get(PathResourceDefinition.PATH.getName())
+                .set(logFile.toAbsolutePath().toString());
         op.get(CommonAttributes.AUTOFLUSH.getName()).set(true);
         op.get(FileHandlerResourceDefinition.FORMATTER.getName()).set("%s%n");
         executeOperation(kernelServices, op);
@@ -176,7 +180,8 @@ public class HandlerOperationsTestCase extends AbstractOperationsTestCase {
         op = SubsystemOperations.createReadAttributeOperation(handlerAddress, FileHandlerResourceDefinition.FORMATTER);
         op.get("include-defaults").set(false);
         ModelNode result = executeOperation(kernelServices, op);
-        assertFalse("formatter attribute was not undefined after the change to a named-formatter", SubsystemOperations.readResult(result).isDefined());
+        assertFalse("formatter attribute was not undefined after the change to a named-formatter", SubsystemOperations.readResult(result)
+                .isDefined());
 
         // Log some more records
         logger.log(Level.INFO, "Test message 3");
@@ -187,9 +192,11 @@ public class HandlerOperationsTestCase extends AbstractOperationsTestCase {
         assertEquals("Number of lines logged and found in the file do not match", 4, lines.size());
 
         // Check the lines
-        assertTrue("Line logged does not match expected: 3", Arrays.equals("[changed-pattern] Test message 3".getBytes(ENCODING), lines.get(2).getBytes(ENCODING)));
+        assertTrue("Line logged does not match expected: 3", Arrays.equals("[changed-pattern] Test message 3".getBytes(ENCODING), lines.get(2)
+                .getBytes(ENCODING)));
         // Second line will start with the clear string, followed by the color string
-        assertTrue("Line logged does not match expected: 4", Arrays.equals("[changed-pattern] Test message 4".getBytes(ENCODING), lines.get(3).getBytes(ENCODING)));
+        assertTrue("Line logged does not match expected: 4", Arrays.equals("[changed-pattern] Test message 4".getBytes(ENCODING), lines.get(3)
+                .getBytes(ENCODING)));
 
         // Remove the handler operation
         final ModelNode removeHandlerOp = SubsystemOperations.createOperation("remove-handler", loggerAddress);
@@ -211,13 +218,12 @@ public class HandlerOperationsTestCase extends AbstractOperationsTestCase {
      * attribute in a composite operation. These two specific attributes have strange behavior. If the
      * {@code named-formatter} is defined it removes the formatter, named the same as the handler, which was created
      * as part of the {@code undefine-attribute} operation of the {@code formatter} attribute.
-     *
      */
     @Test
     public void testCompositeOperations() {
         final ModelNode address = createFileHandlerAddress("FILE").toModelNode();
         final String filename = "test-file.log";
-        final String defaultFormatterName = PatternFormatterResourceDefinition.getDefaultFomatterName("FILE");
+        final String defaultFormatterName = PatternFormatterResourceDefinition.getDefaultFormatterName("FILE");
 
         // Add the handler
         ModelNode addOp = OperationBuilder.createAddOperation(address)
@@ -237,21 +243,21 @@ public class HandlerOperationsTestCase extends AbstractOperationsTestCase {
         executeOperation(kernelServices, op.getOperation());
 
         // Get the log context configuration to validate what has been configured
-        final LogContextConfiguration configuration = ConfigurationPersistence.getConfigurationPersistence(LogContext.getLogContext());
+        final ContextConfiguration configuration = WildFlyContextConfiguration.getInstance();
         assertNotNull("Expected to find the configuration", configuration);
         assertFalse("Expected the default formatter named " + defaultFormatterName + " to be removed for the handler FILE",
-                configuration.getFormatterNames().contains(defaultFormatterName));
-        final HandlerConfiguration handlerConfiguration = configuration.getHandlerConfiguration("FILE");
-        assertNotNull("Expected to find the configuration for the FILE handler", configuration);
-        assertEquals("Expected the handler named FILE to use the PATTERN formatter", "PATTERN",
-                handlerConfiguration.getFormatterName());
+                configuration.getFormatters().containsKey(defaultFormatterName));
+        final Handler handler = configuration.getHandler("FILE");
+        assertNotNull("Expected to find the configuration for the FILE handler", handler);
+        assertEquals("Expected the handler named FILE to use the PATTERN formatter", PatternFormatter.class,
+                handler.getFormatter().getClass());
 
         // Undefine the named-formatter to ensure a formatter is created
         executeOperation(kernelServices, SubsystemOperations.createUndefineAttributeOperation(address, "named-formatter"));
         assertTrue("Expected the default formatter named " + defaultFormatterName + " to be added",
-                configuration.getFormatterNames().contains(defaultFormatterName));
-        assertEquals("Expected the handler named FILE to use the FILE formatter", defaultFormatterName,
-                handlerConfiguration.getFormatterName());
+                configuration.getFormatters().containsKey(defaultFormatterName));
+        assertEquals("Expected the handler named FILE to use the FILE formatter", PatternFormatter.class,
+                handler.getFormatter().getClass());
     }
 
     @Test
@@ -298,15 +304,18 @@ public class HandlerOperationsTestCase extends AbstractOperationsTestCase {
         executeOperation(kernelServices, builder.build().getOperation());
 
         // Get the log context configuration to validate what has been configured
-        final LogContextConfiguration configuration = ConfigurationPersistence.getConfigurationPersistence(LogContext.getLogContext());
+        final ContextConfiguration configuration = WildFlyContextConfiguration.getInstance();
         assertNotNull("Expected to find the configuration", configuration);
-        final HandlerConfiguration handlerConfiguration = configuration.getHandlerConfiguration("FILE");
-        assertNotNull("Expected to find the configuration for the FILE handler", configuration);
-        assertEquals("Expected the handler named FILE to use the PATTERN formatter", "PATTERN",
-                handlerConfiguration.getFormatterName());
-        final LoggerConfiguration loggerConfiguration = configuration.getLoggerConfiguration("org.jboss.as.logging");
-        assertNotNull("Expected the logger configuration for org.jboss.as.logging to exist", loggerConfiguration);
-        assertTrue("Expected the FILE handler to be assigned", loggerConfiguration.getHandlerNames().contains("ASYNC"));
+        final Handler handler = configuration.getHandler("FILE");
+        assertNotNull("Expected to find the configuration for the FILE handler", handler);
+        assertEquals("Expected the handler named FILE to use the PATTERN formatter", PatternFormatter.class,
+                handler.getFormatter().getClass());
+        final Logger logger = configuration.getLogger("org.jboss.as.logging");
+        assertNotNull("Expected the logger configuration for org.jboss.as.logging to exist", logger);
+        assertNotNull("No handlers found on logger " + logger.getName(), logger.getHandlers());
+        assertTrue("Expected the FILE handler to be assigned", Stream.of(logger.getHandlers())
+                .anyMatch((h) -> h instanceof AsyncHandler)
+        );
     }
 
     private void testAsyncHandler(final KernelServices kernelServices, final String profileName) {
@@ -363,35 +372,36 @@ public class HandlerOperationsTestCase extends AbstractOperationsTestCase {
         validateResourceAttributes(asyncHandlerResource, Arrays.asList("enabled", "level", "filter-spec", "queue-length",
                 "overflow-action", "subhandlers", "name", "filter"));
         // The name attribute should be the same as the last path element of the address
-        assertEquals(asyncHandlerResource.get(CommonAttributes.NAME.getName()).asString(), PathAddress.pathAddress(address).getLastElement().getValue());
+        assertEquals(asyncHandlerResource.get(CommonAttributes.NAME.getName())
+                .asString(), PathAddress.pathAddress(address).getLastElement().getValue());
 
         // Clean-up
         executeOperation(kernelServices, SubsystemOperations.createRemoveOperation(consoleAddress));
         verifyRemoved(kernelServices, consoleAddress);
+
+        // Create the console handler and add it to the async-handler. Then attempt to remove the console handler which
+        // should fail since it's assigned to the async-handler.
+        op = OperationBuilder.create("add-handler", address)
+                .addAttribute(CommonAttributes.HANDLER_NAME, "CONSOLE")
+                .build();
+        executeOperation(kernelServices, CompositeOperationBuilder.create()
+                .addStep(SubsystemOperations.createAddOperation(consoleAddress))
+                .addStep(op)
+                .build().getOperation());
+
+        // Attempt to remove the CONSOLE handler
+        final ModelNode removeHandlerOp = SubsystemOperations.createOperation("remove", consoleAddress);
+        executeOperationForFailure(kernelServices, removeHandlerOp);
 
         // This needs to execute after all other operations on the async-handler as it will put the state into reload
         // required.
         testWrite(kernelServices, address, AsyncHandlerResourceDefinition.QUEUE_LENGTH, 20);
-        executeOperation(kernelServices, SubsystemOperations.createRemoveOperation(address));
-        verifyRemoved(kernelServices, address);
-
-        // Add an async-handler with the console-handler assigned, then attempt to remove the async-handler which should
-        // result in a failure
-        executeOperation(kernelServices, CompositeOperationBuilder.create()
-                .addStep(SubsystemOperations.createAddOperation(consoleAddress))
-                .addStep(addOp)
-                .build().getOperation());
-
-        // Attempt to remove the CONSOLE handler
-        final ModelNode removeHandlerOp = SubsystemOperations.createOperation("remove-handler", address);
-        removeHandlerOp.get("name").set("CONSOLE");
-        executeOperationForFailure(kernelServices, removeHandlerOp);
 
         // Clean-up
-        executeOperation(kernelServices, SubsystemOperations.createRemoveOperation(consoleAddress));
-        verifyRemoved(kernelServices, consoleAddress);
         executeOperation(kernelServices, SubsystemOperations.createRemoveOperation(address));
         verifyRemoved(kernelServices, address);
+        executeOperation(kernelServices, SubsystemOperations.createRemoveOperation(consoleAddress));
+        verifyRemoved(kernelServices, consoleAddress);
     }
 
     private void testConsoleHandler(final KernelServices kernelServices, final String profileName) {
@@ -635,7 +645,7 @@ public class HandlerOperationsTestCase extends AbstractOperationsTestCase {
         testWrite(kernelServices, address, AbstractHandlerDefinition.FILTER_SPEC, "deny");
 
         // Add a pattern-formatter
-        addPatternFormatter(kernelServices, LoggingProfileOperations.getLoggingProfileName(PathAddress.pathAddress(address)), "PATTERN");
+        addPatternFormatter(kernelServices, Logging.getLoggingProfileName(PathAddress.pathAddress(address)), "PATTERN");
         // The formatter will need to be undefined before the named-formatter can be written
         testUndefine(kernelServices, address, AbstractHandlerDefinition.FORMATTER);
         testWrite(kernelServices, address, AbstractHandlerDefinition.NAMED_FORMATTER, "PATTERN");
@@ -650,13 +660,14 @@ public class HandlerOperationsTestCase extends AbstractOperationsTestCase {
 
         // Remove a pattern-formatter
         testUndefine(kernelServices, address, AbstractHandlerDefinition.NAMED_FORMATTER);
-        removePatternFormatter(kernelServices, LoggingProfileOperations.getLoggingProfileName(PathAddress.pathAddress(address)), "PATTERN");
+        removePatternFormatter(kernelServices, Logging.getLoggingProfileName(PathAddress.pathAddress(address)), "PATTERN");
     }
 
     private void addPatternFormatter(final KernelServices kernelServices, final String profileName, final String name) {
         final ModelNode address = createPatternFormatterAddress(profileName, name).toModelNode();
         final ModelNode op = createAddOperation(address);
-        op.get(PatternFormatterResourceDefinition.PATTERN.getName()).set("[test-pattern] %d{HH:mm:ss,SSS} %-5p [%c] %s%e%n");
+        op.get(PatternFormatterResourceDefinition.PATTERN.getName())
+                .set("[test-pattern] %d{HH:mm:ss,SSS} %-5p [%c] %s%e%n");
         executeOperation(kernelServices, op);
     }
 
@@ -684,10 +695,13 @@ public class HandlerOperationsTestCase extends AbstractOperationsTestCase {
     @Override
     protected void verifyRemoved(KernelServices kernelServices, ModelNode address) {
         super.verifyRemoved(kernelServices, address);
-        final LogContextConfiguration configuration = ConfigurationPersistence.getConfigurationPersistence(LogContext.getLogContext());
-        final String name = address.get(address.asInt() - 1).asProperty().getValue().asString();
-        final String defaultFormatterName = PatternFormatterResourceDefinition.getDefaultFomatterName(name);
-        assertFalse("Expected the default formatter named " + defaultFormatterName + " to be removed for the handler " + name,
-                configuration.getFormatterNames().contains(defaultFormatterName));
+        // If a reload is not required, ensure the default formatter has also been removed.
+        if (!isReloadRequired(kernelServices)) {
+            final ContextConfiguration configuration = WildFlyContextConfiguration.getInstance();
+            final String name = address.get(address.asInt() - 1).asProperty().getValue().asString();
+            final String defaultFormatterName = PatternFormatterResourceDefinition.getDefaultFormatterName(name);
+            assertFalse("Expected the default formatter named " + defaultFormatterName + " to be removed for the handler " + name,
+                    configuration.getFormatters().containsKey(defaultFormatterName));
+        }
     }
 }
