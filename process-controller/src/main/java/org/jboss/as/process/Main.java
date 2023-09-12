@@ -45,8 +45,13 @@ import org.jboss.as.process.protocol.ProtocolServer;
 import org.jboss.as.version.ProductConfig;
 import org.jboss.as.version.Version;
 import org.jboss.logging.MDC;
+import org.jboss.logmanager.Level;
 import org.jboss.logmanager.handlers.ConsoleHandler;
 import org.jboss.modules.Module;
+import org.jboss.stdio.LoggingOutputStream;
+import org.jboss.stdio.NullInputStream;
+import org.jboss.stdio.SimpleStdioContextSelector;
+import org.jboss.stdio.StdioContext;
 import org.jboss.threads.JBossThreadFactory;
 import org.wildfly.security.manager.WildFlySecurityManager;
 
@@ -216,6 +221,21 @@ public final class Main {
         });
         configuration.setThreadFactory(threadFactory);
         configuration.setReadExecutor(Executors.newCachedThreadPool(threadFactory));
+
+        // Make sure our original stdio is properly captured.
+        try {
+            Class.forName(ConsoleHandler.class.getName(), true, ConsoleHandler.class.getClassLoader());
+        } catch (Throwable ignored) {
+        }
+
+        // Install JBoss Stdio to avoid any nasty crosstalk.
+        StdioContext.install();
+        final StdioContext context = StdioContext.create(
+                new NullInputStream(),
+                new LoggingOutputStream(org.jboss.logmanager.Logger.getLogger("stdout"), Level.INFO),
+                new LoggingOutputStream(org.jboss.logmanager.Logger.getLogger("stderr"), Level.ERROR)
+        );
+        StdioContext.setStdioContextSelector(new SimpleStdioContextSelector(context));
 
         final ProcessController processController = new ProcessController(configuration, System.out, System.err);
         final InetSocketAddress boundAddress = processController.getServer().getBoundAddress();
